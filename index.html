@@ -63,6 +63,19 @@
     background:color-mix(in srgb, var(--bg) 82%, transparent);
     -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
   }
+  #dimmer{
+    position:fixed; inset:0; z-index:100; pointer-events:none;
+    background:#000; opacity:0;
+  }
+  input[type="range"]{
+    width:100%; margin:10px 0 2px; -webkit-appearance:none; appearance:none;
+    height:6px; border-radius:999px; background:var(--surface2); outline-offset:4px;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:26px; height:26px; border-radius:50%; background:var(--accent);
+    border:none; cursor:pointer;
+  }
 
   h1,h2,h3{ margin:0; text-wrap:balance; }
   .num{ font-family:ui-rounded, -apple-system, system-ui, sans-serif; font-variant-numeric:tabular-nums; }
@@ -294,6 +307,7 @@
 <body>
 
 <div id="statusbar-shim"></div>
+<div id="dimmer"></div>
 <div id="app"></div>
 
 <nav id="tabbar" aria-label="Navigation">
@@ -358,6 +372,7 @@
     db = JSON.parse(localStorage.getItem(KEY));
   } catch(e){ db = null; }
   if (!db || !db.plans) db = seed();
+  if (!db.settings) db.settings = { theme:'auto', brightness:100 };
 
   function save(){
     try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e){ /* storage blocked: app keeps working in memory */ }
@@ -761,6 +776,17 @@
          '<label class="btn ghost" style="text-align:center;cursor:pointer">Backup einspielen' +
          '<input type="file" accept=".json,application/json" data-action="import" style="display:none"></label>' +
          (confirmArm === 'import' ? '<div class="tiny" style="margin-top:8px;color:var(--danger)">Achtung: ersetzt alle aktuellen Daten. Datei erneut wählen zum Bestätigen.</div>' : '') +
+         '</div>';
+
+    h += '<div class="eyebrow" style="margin-top:32px">Einstellungen</div>' +
+         '<div class="card">' +
+         '<div class="tiny">Design</div><div class="chips">' +
+         [['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(function(t){
+           return '<button class="chip' + (db.settings.theme === t[0] ? ' active' : '') + '" data-action="set-theme" data-value="' + t[0] + '">' + t[1] + '</button>';
+         }).join('') +
+         '</div>' +
+         '<div class="tiny" style="margin-top:16px">Helligkeit</div>' +
+         '<input type="range" min="55" max="100" step="5" value="' + db.settings.brightness + '" data-field="brightness" aria-label="Helligkeit">' +
          '</div>';
     return h;
   }
@@ -1175,6 +1201,9 @@
       }
 
       /* misc */
+      case 'set-theme':
+        db.settings.theme = el.getAttribute('data-value');
+        save(); applySettings(); view._keepScroll = true; render(); break;
       case 'export': exportData(); break;
       case 'chart-tip':
         chartTip = (chartTip === +el.getAttribute('data-idx')) ? null : +el.getAttribute('data-idx');
@@ -1219,6 +1248,11 @@
       e.touched = true;
       save(); return;
     }
+    if (field === 'brightness'){
+      db.settings.brightness = +el.value;
+      save(); applySettings();
+      return;
+    }
     if (field === 'plan-name'){
       var p = findPlan(view.planId);
       if (p){ p.name = el.value; save(); }
@@ -1241,6 +1275,14 @@
     }
   });
 
+  // applies theme choice and dimming; runs at start and on every change
+  function applySettings(){
+    var s = db.settings;
+    if (s.theme === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', s.theme);
+    document.getElementById('dimmer').style.opacity = String((100 - s.brightness) / 100 * 0.7);
+  }
+  applySettings();
   render();
 
   if ('serviceWorker' in navigator){
