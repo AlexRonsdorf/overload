@@ -17,7 +17,7 @@
     --bg:#F4F4F2; --surface:#FFFFFF; --surface2:#ECECEA;
     --ink:#17181A; --ink2:#6E7176; --ink3:#A0A3A8;
     --line:#E4E4E1; --accent:#2E4FE0; --accent-ink:#FFFFFF; --accent-soft:rgba(46,79,224,.10);
-    --danger:#C43D3D;
+    --danger:#C43D3D; --toast-accent:#9DB1FF;
     --radius:16px;
   }
   @media (prefers-color-scheme: dark){
@@ -25,20 +25,20 @@
       --bg:#0C0D0F; --surface:#151619; --surface2:#1E2024;
       --ink:#F3F3F1; --ink2:#A2A5AA; --ink3:#686B71;
       --line:#26282D; --accent:#5D7CFF; --accent-ink:#0B0C0E; --accent-soft:rgba(93,124,255,.14);
-      --danger:#E06A6A;
+      --danger:#E06A6A; --toast-accent:#2E4FE0;
     }
   }
   :root[data-theme="light"]{
     --bg:#F4F4F2; --surface:#FFFFFF; --surface2:#ECECEA;
     --ink:#17181A; --ink2:#6E7176; --ink3:#A0A3A8;
     --line:#E4E4E1; --accent:#2E4FE0; --accent-ink:#FFFFFF; --accent-soft:rgba(46,79,224,.10);
-    --danger:#C43D3D;
+    --danger:#C43D3D; --toast-accent:#9DB1FF;
   }
   :root[data-theme="dark"]{
     --bg:#0C0D0F; --surface:#151619; --surface2:#1E2024;
     --ink:#F3F3F1; --ink2:#A2A5AA; --ink3:#686B71;
     --line:#26282D; --accent:#5D7CFF; --accent-ink:#0B0C0E; --accent-soft:rgba(93,124,255,.14);
-    --danger:#E06A6A;
+    --danger:#E06A6A; --toast-accent:#2E4FE0;
   }
 
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -54,8 +54,14 @@
   button, .tab, .chip, .listitem{ -webkit-user-select:none; user-select:none; }
   #app{
     max-width:460px; margin:0 auto;
-    padding:20px 18px calc(96px + env(safe-area-inset-bottom));
+    padding:calc(16px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom));
     min-height:100vh;
+  }
+  #statusbar-shim{
+    position:fixed; top:0; left:0; right:0; z-index:11;
+    height:env(safe-area-inset-top);
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
+    -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
   }
 
   h1,h2,h3{ margin:0; text-wrap:balance; }
@@ -84,6 +90,11 @@
     padding:15px 16px; margin-top:14px; cursor:pointer;
   }
   .btn.on-accent{ background:var(--accent-ink); color:var(--accent); }
+  .btn.on-accent-ghost{
+    background:transparent; color:var(--accent-ink);
+    border:1px solid color-mix(in srgb, var(--accent-ink) 40%, transparent);
+    font-weight:600;
+  }
   .btn.ghost{
     background:var(--surface); color:var(--ink); border:1px solid var(--line);
     font-weight:600;
@@ -143,6 +154,7 @@
   .stepbtn:active{ background:var(--line); }
   .stepval{
     flex:1; min-width:0; height:44px; border:none; background:none; text-align:center;
+    text-align-last:center; -webkit-appearance:none; appearance:none; border-radius:0;
     font-family:ui-rounded, -apple-system, system-ui, sans-serif;
     font-size:17px; font-weight:700; color:var(--ink); padding:0;
     font-variant-numeric:tabular-nums;
@@ -175,7 +187,8 @@
     padding:12px 12px; margin-top:10px;
   }
   .miniinput{
-    width:52px; text-align:center; background:var(--surface2); border:none; border-radius:10px;
+    width:52px; text-align:center; text-align-last:center; background:var(--surface2);
+    border:none; border-radius:10px; -webkit-appearance:none; appearance:none;
     font-family:ui-rounded, -apple-system, system-ui, sans-serif; font-size:16px; font-weight:700;
     color:var(--ink); padding:9px 4px; font-variant-numeric:tabular-nums;
   }
@@ -224,11 +237,17 @@
   #toast{
     position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom));
     transform:translateX(-50%) translateY(8px); z-index:20;
+    display:flex; align-items:center; gap:12px; white-space:nowrap;
     background:var(--ink); color:var(--bg); font-size:14px; font-weight:600;
     padding:10px 18px; border-radius:999px; opacity:0; pointer-events:none;
     transition:opacity .25s, transform .25s;
   }
-  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  #toastUndo{
+    display:none; border:none; background:none; padding:0; cursor:pointer;
+    font-family:inherit; font-size:14px; font-weight:800; color:var(--toast-accent);
+  }
+  #toast.undoable #toastUndo{ display:inline; }
   @media (prefers-reduced-motion: reduce){
     #toast{ transition:none; }
   }
@@ -236,6 +255,7 @@
 </head>
 <body>
 
+<div id="statusbar-shim"></div>
 <div id="app"></div>
 
 <nav id="tabbar" aria-label="Navigation">
@@ -255,7 +275,7 @@
   </div>
 </nav>
 
-<div id="toast" role="status"></div>
+<div id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo">Rückgängig</button></div>
 
 <script>
 (function(){
@@ -373,6 +393,36 @@
     for (i=0;i<last.sets.length;i++) maxW = Math.max(maxW, last.sets[i].w || 0);
     return 'Letztes Mal (' + fmtDM(last.date) + '): ' + fmtSets(last.sets);
   }
+  // options for the iOS wheel pickers (selects); pre-selects the current value
+  function wheelOptions(cur, min, max, step, allowEmpty){
+    var html = allowEmpty ? '<option value=""' + (cur === null || cur === undefined ? ' selected' : '') + '>–</option>' : '';
+    var matched = false;
+    for (var v = min; v <= max + 1e-9; v += step){
+      var val = Math.round(v * 100) / 100;
+      var sel = (cur !== null && cur !== undefined && Math.abs(cur - val) < 1e-9);
+      if (sel) matched = true;
+      html += '<option value="' + val + '"' + (sel ? ' selected' : '') + '>' + fmtW(val) + '</option>';
+    }
+    if (cur !== null && cur !== undefined && !matched){
+      html = '<option value="' + cur + '" selected>' + fmtW(cur) + '</option>' + html;
+    }
+    return html;
+  }
+  // update a wheel select next to a +/- button without re-rendering the whole view
+  function setWheel(btn, v){
+    var sel = btn.parentNode.querySelector('select');
+    if (!sel) return;
+    var sv = String(v), found = false;
+    for (var i = 0; i < sel.options.length; i++){
+      if (sel.options[i].value === sv){ found = true; break; }
+    }
+    if (!found){
+      var o = document.createElement('option');
+      o.value = sv; o.textContent = fmtW(v);
+      sel.appendChild(o);
+    }
+    sel.value = sv;
+  }
 
   /* ---------- View state ---------- */
   var view = { name:'home' };
@@ -380,13 +430,31 @@
   var chartTip = null;     // tapped point index in analytics
   var analyticsEx = null;  // selected exercise name
 
-  function toast(msg){
+  var undoSnapshot = null;
+
+  function toast(msg, undoable){
     var t = document.getElementById('toast');
-    t.textContent = msg;
+    document.getElementById('toastMsg').textContent = msg;
+    t.classList.toggle('undoable', !!undoable);
     t.classList.add('show');
     clearTimeout(toast._t);
-    toast._t = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+    toast._t = setTimeout(function(){ t.classList.remove('show'); }, undoable ? 7000 : 2200);
   }
+
+  // call BEFORE a destructive change: remembers the current state for one-step undo
+  function rememberForUndo(){
+    undoSnapshot = JSON.stringify(db);
+  }
+
+  document.getElementById('toastUndo').addEventListener('click', function(){
+    if (!undoSnapshot) return;
+    db = JSON.parse(undoSnapshot);
+    undoSnapshot = null;
+    save();
+    document.getElementById('toast').classList.remove('show');
+    render();
+    toast('Wiederhergestellt ✓');
+  });
 
   /* ---------- Renderers ---------- */
   var app = document.getElementById('app');
@@ -446,6 +514,8 @@
              '<h2 style="font-size:24px">' + esc(db.draft.dayName) + '</h2>' +
              '<div class="sub">' + db.draft.entries.length + ' Übungen</div>' +
              '<button class="btn on-accent" data-action="resume">Workout fortsetzen</button>' +
+             '<button class="btn on-accent-ghost" data-action="discard" data-confirm="discard">' +
+             (confirmArm === 'discard' ? 'Wirklich verwerfen?' : 'Workout verwerfen') + '</button>' +
              '</div>';
       } else if (today){
         var lastDone = null;
@@ -536,13 +606,13 @@
              '<span class="setnum num">' + (si+1) + '</span>' +
              '<div class="stepgroup">' +
                '<button class="stepbtn" data-action="w-dec" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht minus">−</button>' +
-               '<input class="stepval" inputmode="decimal" data-field="w" data-ex="' + ei + '" data-set="' + si + '" value="' + fmtW(s.w) + '" placeholder="–" aria-label="Gewicht">' +
+               '<select class="stepval" data-field="w" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht">' + wheelOptions(s.w, 0, 300, 0.5, true) + '</select>' +
                '<span class="unit">KG</span>' +
                '<button class="stepbtn" data-action="w-inc" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht plus">+</button>' +
              '</div>' +
              '<div class="stepgroup" style="max-width:132px">' +
                '<button class="stepbtn" data-action="r-dec" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen minus">−</button>' +
-               '<input class="stepval" inputmode="numeric" data-field="r" data-ex="' + ei + '" data-set="' + si + '" value="' + (s.r === null ? '' : s.r) + '" placeholder="–" aria-label="Wiederholungen">' +
+               '<select class="stepval" data-field="r" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen">' + wheelOptions(s.r, 0, 50, 1, true) + '</select>' +
                '<span class="unit">WDH</span>' +
              '</div>' +
              '</div>';
@@ -678,9 +748,9 @@
            '</div>' +
            '<div class="row" style="margin-top:8px">' +
              '<span class="tiny">Ziel:</span>' +
-             '<input class="miniinput" inputmode="numeric" value="' + ex.sets + '" data-field="ex-sets" data-ex="' + i + '" aria-label="Sätze">' +
+             '<select class="miniinput" data-field="ex-sets" data-ex="' + i + '" aria-label="Sätze">' + wheelOptions(ex.sets, 1, 10, 1, false) + '</select>' +
              '<span class="tiny">Sätze ×</span>' +
-             '<input class="miniinput" inputmode="numeric" value="' + ex.reps + '" data-field="ex-reps" data-ex="' + i + '" aria-label="Wiederholungen">' +
+             '<select class="miniinput" data-field="ex-reps" data-ex="' + i + '" aria-label="Wiederholungen">' + wheelOptions(ex.reps, 1, 50, 1, false) + '</select>' +
              '<span class="tiny">Wdh.</span>' +
            '</div></div>';
     });
@@ -888,8 +958,9 @@
       case 'open-session':
         view = { name:'session', id: el.getAttribute('data-id') }; render(); break;
       case 'del-session':
+        rememberForUndo();
         db.sessions = db.sessions.filter(function(s){ return s.id !== el.getAttribute('data-id'); });
-        save(); view = { name:'home' }; render(); toast('Eintrag gelöscht'); break;
+        save(); view = { name:'home' }; render(); toast('Eintrag gelöscht', true); break;
 
       /* tracking */
       case 'w-inc': case 'w-dec': {
@@ -897,14 +968,14 @@
         var cur = s1.w === null ? 0 : s1.w;
         s1.w = Math.max(0, Math.round((cur + (action==='w-inc'?1:-1))*100)/100);
         e1.touched = true;
-        save(); view._keepScroll = true; render(); break;
+        save(); setWheel(el, s1.w); break;
       }
       case 'r-inc': case 'r-dec': {
         var e2 = d.entries[+el.getAttribute('data-ex')], s2 = e2.sets[+el.getAttribute('data-set')];
         var cr = s2.r === null ? 0 : s2.r;
         s2.r = Math.max(0, cr + (action==='r-inc'?1:-1));
         e2.touched = true;
-        save(); view._keepScroll = true; render(); break;
+        save(); setWheel(el, s2.r); break;
       }
       case 'add-set': {
         var e3 = d.entries[+el.getAttribute('data-ex')];
@@ -926,7 +997,8 @@
       }
       case 'finish': finishWorkout(); break;
       case 'discard':
-        db.draft = null; save(); view = { name:'home' }; render(); toast('Workout verworfen'); break;
+        rememberForUndo();
+        db.draft = null; save(); view = { name:'home' }; render(); toast('Workout verworfen', true); break;
 
       /* plans */
       case 'open-plan':
@@ -940,11 +1012,12 @@
         db.activePlanId = el.getAttribute('data-id'); save();
         view._keepScroll = true; render(); toast('Plan aktiviert'); break;
       case 'del-plan': {
+        rememberForUndo();
         var pid = el.getAttribute('data-id');
         db.plans = db.plans.filter(function(p){ return p.id !== pid; });
         if (db.activePlanId === pid) db.activePlanId = db.plans.length ? db.plans[0].id : null;
         if (db.draft && db.draft.planId === pid) db.draft = null;
-        save(); view = { name:'plans' }; render(); toast('Plan gelöscht'); break;
+        save(); view = { name:'plans' }; render(); toast('Plan gelöscht', true); break;
       }
       case 'add-day': {
         var p2 = findPlan(view.planId);
@@ -955,9 +1028,10 @@
       case 'open-day':
         view = { name:'dayEdit', planId:view.planId, dayId: el.getAttribute('data-id') }; render(); break;
       case 'del-day': {
+        rememberForUndo();
         var p3 = findPlan(view.planId);
         p3.days = p3.days.filter(function(x){ return x.id !== view.dayId; });
-        save(); view = { name:'planEdit', planId:p3.id }; render(); break;
+        save(); view = { name:'planEdit', planId:p3.id }; render(); toast('Trainingstag entfernt', true); break;
       }
       case 'toggle-wd': {
         var p4 = findPlan(view.planId), d4 = findDay(p4, view.dayId);
@@ -975,9 +1049,11 @@
         save(); view._keepScroll = true; render(); break;
       }
       case 'ex-del': {
+        rememberForUndo();
         var p6 = findPlan(view.planId), d6 = findDay(p6, view.dayId);
-        d6.exercises.splice(+el.getAttribute('data-ex'), 1);
-        save(); view._keepScroll = true; render(); break;
+        var removed = d6.exercises.splice(+el.getAttribute('data-ex'), 1);
+        save(); view._keepScroll = true; render();
+        toast((removed[0] ? removed[0].name : 'Übung') + ' entfernt', true); break;
       }
       case 'ex-up': case 'ex-down': {
         var p7 = findPlan(view.planId), d7 = findDay(p7, view.dayId);
