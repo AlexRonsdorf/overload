@@ -41,6 +41,43 @@
     --danger:#E06A6A; --toast-accent:#2E4FE0;
   }
 
+  /* Akzentfarben (jeweils helle + dunkle Variante); Blau ist der Standard oben */
+  :root[data-accent="violet"]{ --accent:#6D28D9; --accent-ink:#FFFFFF; --accent-soft:rgba(109,40,217,.10); --toast-accent:#A78BFA; }
+  :root[data-accent="green"]{ --accent:#047857; --accent-ink:#FFFFFF; --accent-soft:rgba(4,120,87,.10); --toast-accent:#34D399; }
+  :root[data-accent="orange"]{ --accent:#C2410C; --accent-ink:#FFFFFF; --accent-soft:rgba(194,65,12,.10); --toast-accent:#FB923C; }
+  :root[data-accent="pink"]{ --accent:#BE185D; --accent-ink:#FFFFFF; --accent-soft:rgba(190,24,93,.10); --toast-accent:#F472B6; }
+  @media (prefers-color-scheme: dark){
+    :root[data-accent="violet"]{ --accent:#A78BFA; --accent-ink:#0B0C0E; --accent-soft:rgba(167,139,250,.14); --toast-accent:#6D28D9; }
+    :root[data-accent="green"]{ --accent:#34D399; --accent-ink:#0B0C0E; --accent-soft:rgba(52,211,153,.14); --toast-accent:#047857; }
+    :root[data-accent="orange"]{ --accent:#FB923C; --accent-ink:#0B0C0E; --accent-soft:rgba(251,146,60,.14); --toast-accent:#C2410C; }
+    :root[data-accent="pink"]{ --accent:#F472B6; --accent-ink:#0B0C0E; --accent-soft:rgba(244,114,182,.14); --toast-accent:#BE185D; }
+  }
+  :root[data-theme="light"][data-accent="violet"]{ --accent:#6D28D9; --accent-ink:#FFFFFF; --accent-soft:rgba(109,40,217,.10); --toast-accent:#A78BFA; }
+  :root[data-theme="light"][data-accent="green"]{ --accent:#047857; --accent-ink:#FFFFFF; --accent-soft:rgba(4,120,87,.10); --toast-accent:#34D399; }
+  :root[data-theme="light"][data-accent="orange"]{ --accent:#C2410C; --accent-ink:#FFFFFF; --accent-soft:rgba(194,65,12,.10); --toast-accent:#FB923C; }
+  :root[data-theme="light"][data-accent="pink"]{ --accent:#BE185D; --accent-ink:#FFFFFF; --accent-soft:rgba(190,24,93,.10); --toast-accent:#F472B6; }
+  :root[data-theme="dark"][data-accent="violet"]{ --accent:#A78BFA; --accent-ink:#0B0C0E; --accent-soft:rgba(167,139,250,.14); --toast-accent:#6D28D9; }
+  :root[data-theme="dark"][data-accent="green"]{ --accent:#34D399; --accent-ink:#0B0C0E; --accent-soft:rgba(52,211,153,.14); --toast-accent:#047857; }
+  :root[data-theme="dark"][data-accent="orange"]{ --accent:#FB923C; --accent-ink:#0B0C0E; --accent-soft:rgba(251,146,60,.14); --toast-accent:#C2410C; }
+  :root[data-theme="dark"][data-accent="pink"]{ --accent:#F472B6; --accent-ink:#0B0C0E; --accent-soft:rgba(244,114,182,.14); --toast-accent:#BE185D; }
+
+  /* Farb-Punkte in den Settings */
+  .swatches{ display:flex; gap:14px; margin-top:10px; }
+  .swatch{ width:36px; height:36px; border-radius:50%; border:none; cursor:pointer; position:relative; }
+  .swatch.active::after{ content:""; position:absolute; inset:-6px; border:2px solid var(--ink); border-radius:50%; }
+  .sw-blue{ background:#2E4FE0; } .sw-violet{ background:#6D28D9; } .sw-green{ background:#047857; }
+  .sw-orange{ background:#C2410C; } .sw-pink{ background:#BE185D; }
+  @media (prefers-color-scheme: dark){
+    .sw-blue{ background:#5D7CFF; } .sw-violet{ background:#A78BFA; } .sw-green{ background:#34D399; }
+    .sw-orange{ background:#FB923C; } .sw-pink{ background:#F472B6; }
+  }
+  :root[data-theme="light"] .sw-blue{ background:#2E4FE0; } :root[data-theme="light"] .sw-violet{ background:#6D28D9; }
+  :root[data-theme="light"] .sw-green{ background:#047857; } :root[data-theme="light"] .sw-orange{ background:#C2410C; }
+  :root[data-theme="light"] .sw-pink{ background:#BE185D; }
+  :root[data-theme="dark"] .sw-blue{ background:#5D7CFF; } :root[data-theme="dark"] .sw-violet{ background:#A78BFA; }
+  :root[data-theme="dark"] .sw-green{ background:#34D399; } :root[data-theme="dark"] .sw-orange{ background:#FB923C; }
+  :root[data-theme="dark"] .sw-pink{ background:#F472B6; }
+
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; padding:0; }
   body{
@@ -324,6 +361,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19L10 12l4 4 6-8"/><circle cx="20" cy="8" r="1.6" fill="currentColor" stroke="none"/></svg>
       Fortschritt
     </button>
+    <button class="tab" data-action="nav" data-view="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.2" stroke-dasharray="3.1 2.6"/><circle cx="12" cy="12" r="3"/></svg>
+      Settings
+    </button>
   </div>
 </nav>
 
@@ -373,6 +414,7 @@
   } catch(e){ db = null; }
   if (!db || !db.plans) db = seed();
   if (!db.settings) db.settings = { theme:'auto', brightness:100 };
+  if (!db.settings.accent) db.settings.accent = 'blue';
 
   function save(){
     try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e){ /* storage blocked: app keeps working in memory */ }
@@ -558,11 +600,13 @@
       case 'planEdit': html = rPlanEdit(); break;
       case 'dayEdit': html = rDayEdit(); break;
       case 'analytics': html = rAnalytics(); break;
+      case 'settings': html = rSettings(); break;
     }
     app.innerHTML = html;
     var tabs = document.querySelectorAll('.tab');
     var tabView = (view.name === 'home' || view.name === 'track' || view.name === 'session') ? 'home'
-                : (view.name === 'analytics') ? 'analytics' : 'plans';
+                : (view.name === 'analytics') ? 'analytics'
+                : (view.name === 'settings') ? 'settings' : 'plans';
     tabs.forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-view') === tabView); });
     window.scrollTo(0, view._keepScroll ? window.scrollY : 0);
     view._keepScroll = false;
@@ -769,6 +813,28 @@
            '<span class="chev">›</span></button>';
     });
     h += '<button class="btn ghost" data-action="add-plan">＋ Neuer Plan</button>';
+    return h;
+  }
+
+  /* ----- Settings ----- */
+  function rSettings(){
+    var h = '<div class="eyebrow">App</div><div class="bigdate">Settings</div>';
+
+    h += '<div class="eyebrow" style="margin-top:24px">Design</div>' +
+         '<div class="card">' +
+         '<div class="tiny">Hell / Dunkel</div><div class="chips">' +
+         [['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(function(t){
+           return '<button class="chip' + (db.settings.theme === t[0] ? ' active' : '') + '" data-action="set-theme" data-value="' + t[0] + '">' + t[1] + '</button>';
+         }).join('') +
+         '</div>' +
+         '<div class="tiny" style="margin-top:16px">Akzentfarbe</div><div class="swatches">' +
+         [['blue','Blau'],['violet','Violett'],['green','Grün'],['orange','Orange'],['pink','Pink']].map(function(c){
+           return '<button class="swatch sw-' + c[0] + (db.settings.accent === c[0] ? ' active' : '') + '" data-action="set-accent" data-value="' + c[0] + '" aria-label="' + c[1] + '"></button>';
+         }).join('') +
+         '</div>' +
+         '<div class="tiny" style="margin-top:18px">Helligkeit</div>' +
+         '<input type="range" min="55" max="100" step="5" value="' + db.settings.brightness + '" data-field="brightness" aria-label="Helligkeit">' +
+         '</div>';
 
     h += '<div class="eyebrow" style="margin-top:32px">Daten</div>' +
          '<div class="card"><div class="sub">Sichere deine Daten regelmäßig als Datei — z. B. bevor du das Handy wechselst.</div>' +
@@ -776,17 +842,6 @@
          '<label class="btn ghost" style="text-align:center;cursor:pointer">Backup einspielen' +
          '<input type="file" accept=".json,application/json" data-action="import" style="display:none"></label>' +
          (confirmArm === 'import' ? '<div class="tiny" style="margin-top:8px;color:var(--danger)">Achtung: ersetzt alle aktuellen Daten. Datei erneut wählen zum Bestätigen.</div>' : '') +
-         '</div>';
-
-    h += '<div class="eyebrow" style="margin-top:32px">Einstellungen</div>' +
-         '<div class="card">' +
-         '<div class="tiny">Design</div><div class="chips">' +
-         [['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(function(t){
-           return '<button class="chip' + (db.settings.theme === t[0] ? ' active' : '') + '" data-action="set-theme" data-value="' + t[0] + '">' + t[1] + '</button>';
-         }).join('') +
-         '</div>' +
-         '<div class="tiny" style="margin-top:16px">Helligkeit</div>' +
-         '<input type="range" min="55" max="100" step="5" value="' + db.settings.brightness + '" data-field="brightness" aria-label="Helligkeit">' +
          '</div>';
     return h;
   }
@@ -1204,6 +1259,9 @@
       case 'set-theme':
         db.settings.theme = el.getAttribute('data-value');
         save(); applySettings(); view._keepScroll = true; render(); break;
+      case 'set-accent':
+        db.settings.accent = el.getAttribute('data-value');
+        save(); applySettings(); view._keepScroll = true; render(); break;
       case 'export': exportData(); break;
       case 'chart-tip':
         chartTip = (chartTip === +el.getAttribute('data-idx')) ? null : +el.getAttribute('data-idx');
@@ -1280,6 +1338,7 @@
     var s = db.settings;
     if (s.theme === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', s.theme);
+    document.documentElement.setAttribute('data-accent', s.accent);
     document.getElementById('dimmer').style.opacity = String((100 - s.brightness) / 100 * 0.7);
   }
   applySettings();
