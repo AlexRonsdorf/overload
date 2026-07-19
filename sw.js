@@ -1,7 +1,7 @@
 /* Overload service worker: makes the app load offline.
    Navigation requests go network-first (so updates arrive immediately when online)
    with cache fallback; static assets are cache-first. */
-var CACHE = 'overload-v5';
+var CACHE = 'overload-v6';
 var ASSETS = ['index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', function(e){

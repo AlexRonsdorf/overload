@@ -390,19 +390,19 @@
   var uid = function(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); };
 
   function seed(){
-    var ex = function(name, sets, reps){ return { id:uid(), name:name, sets:sets, reps:reps }; };
+    var ex = function(name, sets, reps, repsMax){ return { id:uid(), name:name, sets:sets, reps:reps, repsMax:repsMax || null }; };
     var plan = {
       id: uid(), name: '3-Day Split',
       days: [
         { id:uid(), name:'Push', weekdays:[1], exercises:[
-          ex('Bankdrücken',3,8), ex('Schulterdrücken',3,10), ex('Dips',3,10),
-          ex('Seitheben',3,12), ex('Trizeps am Kabel',3,12) ] },
+          ex('Bankdrücken',3,6,8), ex('Schulterdrücken',3,8,10), ex('Dips',3,8,12),
+          ex('Seitheben',3,12,15), ex('Trizeps am Kabel',3,10,12) ] },
         { id:uid(), name:'Pull', weekdays:[2], exercises:[
-          ex('Klimmzüge',3,8), ex('Langhantel-Rudern',3,8), ex('Latzug',3,10),
-          ex('Face Pulls',3,15), ex('Bizeps-Curls',3,12) ] },
+          ex('Klimmzüge',3,6,10), ex('Langhantel-Rudern',3,6,8), ex('Latzug',3,8,12),
+          ex('Face Pulls',3,12,15), ex('Bizeps-Curls',3,10,12) ] },
         { id:uid(), name:'Legs', weekdays:[5], exercises:[
-          ex('Kniebeugen',3,8), ex('Rumänisches Kreuzheben',3,10), ex('Beinpresse',3,10),
-          ex('Beinbeugen',3,12), ex('Wadenheben',4,15) ] }
+          ex('Kniebeugen',3,6,8), ex('Rumänisches Kreuzheben',3,8,10), ex('Beinpresse',3,8,12),
+          ex('Beinbeugen',3,10,12), ex('Wadenheben',4,12,15) ] }
       ]
     };
     return { plans:[plan], activePlanId:plan.id, sessions:[], draft:null };
@@ -498,6 +498,10 @@
     var maxW = 0, i;
     for (i=0;i<last.sets.length;i++) maxW = Math.max(maxW, last.sets[i].w || 0);
     return 'Letztes Mal (' + fmtDM(last.date) + '): ' + fmtSets(last.sets);
+  }
+  // "6–8" for a rep range, "10" for a single target
+  function fmtRepsRange(ex){
+    return (ex.repsMax != null && ex.repsMax > ex.reps) ? ex.reps + '–' + ex.repsMax : String(ex.reps);
   }
   // list of pickable values, e.g. weights 0–300 in 0.5 steps; null = "not set" (–)
   function rangeVals(min, max, step, withNull, cur){
@@ -715,6 +719,7 @@
         for (var i=0;i<ex.sets;i++) sets.push({ w:null, r:ex.reps });
       }
       return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
+               target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
                last:last ? { sets:last.sets, date:last.date } : null };
     });
     db.draft = { date:todayISO(), planId:plan.id, dayId:day.id, dayName:day.name, entries:entries };
@@ -733,6 +738,7 @@
     d.entries.forEach(function(e, ei){
       h += '<div class="card excard' + (e.done ? ' done' : '') + '">' +
            '<div class="exname">' + esc(e.name) + '</div>' +
+           (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
            '<div class="lastline">' + esc(summarizeLast(e.last)) + '</div>';
       e.sets.forEach(function(s, si){
         h += '<div class="setrow">' +
@@ -905,7 +911,9 @@
              '<span class="tiny">Ziel:</span>' +
              '<button class="miniinput" data-action="pick" data-field="ex-sets" data-ex="' + i + '" aria-label="Sätze wählen">' + ex.sets + '</button>' +
              '<span class="tiny">Sätze ×</span>' +
-             '<button class="miniinput" data-action="pick" data-field="ex-reps" data-ex="' + i + '" aria-label="Wiederholungen wählen">' + ex.reps + '</button>' +
+             '<button class="miniinput" data-action="pick" data-field="ex-reps" data-ex="' + i + '" aria-label="Wiederholungen von">' + ex.reps + '</button>' +
+             '<span class="tiny">bis</span>' +
+             '<button class="miniinput" data-action="pick" data-field="ex-reps-max" data-ex="' + i + '" aria-label="Wiederholungen bis">' + (ex.repsMax != null ? ex.repsMax : '–') + '</button>' +
              '<span class="tiny">Wdh.</span>' +
            '</div></div>';
     });
@@ -1172,17 +1180,26 @@
           var pdDay = findDay(findPlan(view.planId), view.dayId);
           if (!pdDay) break;
           var pex = pdDay.exercises[+el.getAttribute('data-ex')];
-          var isSets = field === 'ex-sets';
-          openPicker(
-            pex.name + (isSets ? ' · Ziel-Sätze' : ' · Ziel-Wdh.'),
-            isSets ? rangeVals(1, 10, 1, false, null) : rangeVals(1, 50, 1, false, null),
-            isSets ? pex.sets : pex.reps, isSets ? 'Sätze' : 'Wdh.',
-            function(value){
-              if (isSets) pex.sets = value; else pex.reps = value;
-              save();
-              el.textContent = value;
-            }
-          );
+          if (field === 'ex-sets'){
+            openPicker(pex.name + ' · Ziel-Sätze', rangeVals(1, 10, 1, false, null), pex.sets, 'Sätze',
+              function(value){
+                pex.sets = value;
+                save(); view._keepScroll = true; render();
+              });
+          } else if (field === 'ex-reps'){
+            openPicker(pex.name + ' · Wiederholungen (von)', rangeVals(1, 50, 1, false, null), pex.reps, 'Wdh.',
+              function(value){
+                pex.reps = value;
+                if (pex.repsMax != null && pex.repsMax <= value) pex.repsMax = null; // range collapsed
+                save(); view._keepScroll = true; render();
+              });
+          } else if (field === 'ex-reps-max'){
+            openPicker(pex.name + ' · Wiederholungen (bis)', rangeVals(pex.reps + 1, 50, 1, true, pex.repsMax != null ? pex.repsMax : null), pex.repsMax != null ? pex.repsMax : null, 'Wdh.',
+              function(value){
+                pex.repsMax = value;
+                save(); view._keepScroll = true; render();
+              });
+          }
         }
         break;
       }
