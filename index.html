@@ -17,7 +17,7 @@
     --bg:#F4F4F2; --surface:#FFFFFF; --surface2:#ECECEA;
     --ink:#17181A; --ink2:#6E7176; --ink3:#A0A3A8;
     --line:#E4E4E1; --accent:#2E4FE0; --accent-ink:#FFFFFF; --accent-soft:rgba(46,79,224,.10);
-    --danger:#C43D3D; --toast-accent:#9DB1FF;
+    --danger:#C43D3D; --toast-accent:#9DB1FF; --up:#15803D;
     --radius:16px;
   }
   @media (prefers-color-scheme: dark){
@@ -25,20 +25,20 @@
       --bg:#0C0D0F; --surface:#151619; --surface2:#1E2024;
       --ink:#F3F3F1; --ink2:#A2A5AA; --ink3:#686B71;
       --line:#26282D; --accent:#5D7CFF; --accent-ink:#0B0C0E; --accent-soft:rgba(93,124,255,.14);
-      --danger:#E06A6A; --toast-accent:#2E4FE0;
+      --danger:#E06A6A; --toast-accent:#2E4FE0; --up:#4ADE80;
     }
   }
   :root[data-theme="light"]{
     --bg:#F4F4F2; --surface:#FFFFFF; --surface2:#ECECEA;
     --ink:#17181A; --ink2:#6E7176; --ink3:#A0A3A8;
     --line:#E4E4E1; --accent:#2E4FE0; --accent-ink:#FFFFFF; --accent-soft:rgba(46,79,224,.10);
-    --danger:#C43D3D; --toast-accent:#9DB1FF;
+    --danger:#C43D3D; --toast-accent:#9DB1FF; --up:#15803D;
   }
   :root[data-theme="dark"]{
     --bg:#0C0D0F; --surface:#151619; --surface2:#1E2024;
     --ink:#F3F3F1; --ink2:#A2A5AA; --ink3:#686B71;
     --line:#26282D; --accent:#5D7CFF; --accent-ink:#0B0C0E; --accent-soft:rgba(93,124,255,.14);
-    --danger:#E06A6A; --toast-accent:#2E4FE0;
+    --danger:#E06A6A; --toast-accent:#2E4FE0; --up:#4ADE80;
   }
 
   /* Akzentfarben (jeweils helle + dunkle Variante); Blau ist der Standard oben */
@@ -208,6 +208,8 @@
     font-size:17px; font-weight:700; color:var(--ink); padding:0;
     font-variant-numeric:tabular-nums; cursor:pointer;
   }
+  .stepval.up{ color:var(--up); }
+  .stepval.down{ color:var(--danger); }
   /* Picker: eigenes iOS-Style-Rad im Bottom-Sheet */
   #picker{ position:fixed; inset:0; z-index:30; }
   #picker[hidden]{ display:none; }
@@ -390,15 +392,15 @@
   var uid = function(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); };
 
   function seed(){
-    var ex = function(name, sets, reps, repsMax){ return { id:uid(), name:name, sets:sets, reps:reps, repsMax:repsMax || null }; };
+    var ex = function(name, sets, reps, repsMax, bw){ return { id:uid(), name:name, sets:sets, reps:reps, repsMax:repsMax || null, bw:!!bw }; };
     var plan = {
       id: uid(), name: '3-Day Split',
       days: [
         { id:uid(), name:'Push', weekdays:[1], exercises:[
-          ex('Bankdrücken',3,6,8), ex('Schulterdrücken',3,8,10), ex('Dips',3,8,12),
+          ex('Bankdrücken',3,6,8), ex('Schulterdrücken',3,8,10), ex('Dips',3,8,12,true),
           ex('Seitheben',3,12,15), ex('Trizeps am Kabel',3,10,12) ] },
         { id:uid(), name:'Pull', weekdays:[2], exercises:[
-          ex('Klimmzüge',3,6,10), ex('Langhantel-Rudern',3,6,8), ex('Latzug',3,8,12),
+          ex('Klimmzüge',3,6,10,true), ex('Langhantel-Rudern',3,6,8), ex('Latzug',3,8,12),
           ex('Face Pulls',3,12,15), ex('Bizeps-Curls',3,10,12) ] },
         { id:uid(), name:'Legs', weekdays:[5], exercises:[
           ex('Kniebeugen',3,6,8), ex('Rumänisches Kreuzheben',3,8,10), ex('Beinpresse',3,8,12),
@@ -487,17 +489,44 @@
     }
     return null;
   }
-  function fmtSets(sets){
+  function isBWSets(sets){
+    for (var i=0;i<sets.length;i++){ if ((sets[i].w||0) > 0) return false; }
+    return sets.length > 0;
+  }
+  function fmtSets(sets, bw){
+    if (bw === undefined) bw = isBWSets(sets);
+    if (bw) return sets.map(function(s){ return (s.r || 0); }).join(' · ') + ' Wdh.';
     return sets.map(function(s){
       var w = (s.w === null || s.w === undefined) ? 0 : s.w;
-      return fmtW(w) + ' kg × ' + (s.r || 0);
+      return fmtW(w) + ' kg × ' + (s.r || 0);
     }).join('  ·  ');
   }
-  function summarizeLast(last){
+  function summarizeLast(last, bw){
     if (!last) return 'Erstes Mal — noch keine Daten';
-    var maxW = 0, i;
-    for (i=0;i<last.sets.length;i++) maxW = Math.max(maxW, last.sets[i].w || 0);
-    return 'Letztes Mal (' + fmtDM(last.date) + '): ' + fmtSets(last.sets);
+    return 'Letztes Mal (' + fmtDM(last.date) + '): ' + fmtSets(last.sets, bw);
+  }
+  // compares a set's weight with last time (same set number, otherwise last top set)
+  function weightDeltaClass(e, si, w){
+    if (!e.last || w === null || w === undefined) return '';
+    var ref = e.last.sets[si] ? e.last.sets[si].w : null;
+    if (ref === null || ref === undefined){
+      ref = 0;
+      for (var i=0;i<e.last.sets.length;i++) ref = Math.max(ref, e.last.sets[i].w || 0);
+    }
+    if (w > ref) return 'up';
+    if (w < ref) return 'down';
+    return '';
+  }
+  // updates a weight button's number, color and arrow in place
+  function updateWBtn(btn, e, si, w){
+    var group = btn.closest('.stepgroup');
+    var pb = group ? group.querySelector('[data-action="pick"]') : btn;
+    if (!pb) return;
+    var cls = weightDeltaClass(e, si, w);
+    pb.classList.remove('up','down');
+    if (cls) pb.classList.add(cls);
+    pb.textContent = (w === null || w === undefined ? '–' : fmtW(w)) +
+                     (cls === 'up' ? ' ▲' : cls === 'down' ? ' ▼' : '');
   }
   // "6–8" for a rep range, "10" for a single target
   function fmtRepsRange(ex){
@@ -718,7 +747,7 @@
         sets = [];
         for (var i=0;i<ex.sets;i++) sets.push({ w:null, r:ex.reps });
       }
-      return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
+      return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false, bw:!!ex.bw,
                target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
                last:last ? { sets:last.sets, date:last.date } : null };
     });
@@ -739,20 +768,24 @@
       h += '<div class="card excard' + (e.done ? ' done' : '') + '">' +
            '<div class="exname">' + esc(e.name) + '</div>' +
            (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
-           '<div class="lastline">' + esc(summarizeLast(e.last)) + '</div>';
+           '<div class="lastline">' + esc(summarizeLast(e.last, e.bw)) + '</div>';
       e.sets.forEach(function(s, si){
+        var wCls = e.bw ? '' : weightDeltaClass(e, si, s.w);
         h += '<div class="setrow">' +
              '<span class="setnum num">' + (si+1) + '</span>' +
+             (e.bw ? '' :
              '<div class="stepgroup">' +
                '<button class="stepbtn" data-action="w-dec" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht minus">−</button>' +
-               '<button class="stepval" data-action="pick" data-field="w" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht wählen">' + (s.w === null ? '–' : fmtW(s.w)) + '</button>' +
+               '<button class="stepval' + (wCls ? ' ' + wCls : '') + '" data-action="pick" data-field="w" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht wählen">' +
+                 (s.w === null ? '–' : fmtW(s.w)) + (wCls === 'up' ? ' ▲' : wCls === 'down' ? ' ▼' : '') + '</button>' +
                '<span class="unit">KG</span>' +
                '<button class="stepbtn" data-action="w-inc" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht plus">+</button>' +
-             '</div>' +
-             '<div class="stepgroup" style="max-width:132px">' +
+             '</div>') +
+             '<div class="stepgroup"' + (e.bw ? '' : ' style="max-width:132px"') + '>' +
                '<button class="stepbtn" data-action="r-dec" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen minus">−</button>' +
                '<button class="stepval" data-action="pick" data-field="r" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen wählen">' + (s.r === null ? '–' : s.r) + '</button>' +
                '<span class="unit">WDH</span>' +
+               (e.bw ? '<button class="stepbtn" data-action="r-inc" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen plus">+</button>' : '') +
              '</div>' +
              '</div>';
       });
@@ -779,7 +812,7 @@
       if (!e.done && !e.touched) return; // untouched exercises are not saved
       var sets = e.sets.filter(function(s){ return (s.r||0) > 0 || (s.w||0) > 0; })
                        .map(function(s){ return { w:(s.w===null?0:s.w), r:(s.r===null?0:s.r) }; });
-      if (sets.length) entries.push({ exId:e.exId, name:e.name, sets:sets });
+      if (sets.length) entries.push({ exId:e.exId, name:e.name, bw:!!e.bw, sets:sets });
     });
     if (!entries.length){ toast('Nichts eingetragen — hake mindestens eine Übung ab'); return; }
     db.sessions.push({ id:uid(), ts:Date.now(), date:d.date, planName:(findPlan(d.planId)||{}).name || '', dayName:d.dayName, entries:entries });
@@ -800,7 +833,7 @@
             '<div class="bigdate">' + esc(s.dayName) + '</div>';
     s.entries.forEach(function(e){
       h += '<div class="card"><div class="exname">' + esc(e.name) + '</div>' +
-           '<div class="sub num" style="margin-top:4px">' + esc(fmtSets(e.sets)) + '</div></div>';
+           '<div class="sub num" style="margin-top:4px">' + esc(fmtSets(e.sets, e.bw === undefined ? undefined : !!e.bw)) + '</div></div>';
     });
     h += '<button class="btn danger-ghost" data-action="del-session" data-id="' + s.id + '" data-confirm="delsess">' +
          (confirmArm === 'delsess' ? 'Wirklich löschen?' : 'Eintrag löschen') + '</button>';
@@ -915,7 +948,9 @@
              '<span class="tiny">bis</span>' +
              '<button class="miniinput" data-action="pick" data-field="ex-reps-max" data-ex="' + i + '" aria-label="Wiederholungen bis">' + (ex.repsMax != null ? ex.repsMax : '–') + '</button>' +
              '<span class="tiny">Wdh.</span>' +
-           '</div></div>';
+           '</div>' +
+           '<button class="chip' + (ex.bw ? ' active' : '') + '" style="margin-top:10px;font-size:12px;padding:5px 12px" data-action="ex-toggle-bw" data-ex="' + i + '">Bodyweight · ohne kg</button>' +
+           '</div>';
     });
 
     h += '<div class="card"><div class="row">' +
@@ -948,10 +983,19 @@
         if (e.name.trim().toLowerCase() !== key) return;
         var top = 0, vol = 0;
         e.sets.forEach(function(st){ top = Math.max(top, st.w||0); vol += (st.w||0)*(st.r||0); });
-        pts.push({ date:s.date, top:top, vol:vol, sets:e.sets });
+        pts.push({ date:s.date, top:top, vol:vol, sets:e.sets, bw:!!e.bw });
       });
     });
-    return pts;
+    // bodyweight exercises: chart reps instead of a flat 0-kg line
+    var repsMode = pts.length > 0 && pts.every(function(p){ return p.bw || p.top === 0; });
+    if (repsMode){
+      pts.forEach(function(p){
+        var m = 0;
+        p.sets.forEach(function(st){ m = Math.max(m, st.r || 0); });
+        p.top = m;
+      });
+    }
+    return { pts: pts, repsMode: repsMode };
   }
 
   function niceTicks(min, max){
@@ -1018,7 +1062,7 @@
       // prefer an exercise that actually has history
       analyticsEx = names[0];
       for (var i=0;i<names.length;i++){
-        if (exerciseHistory(names[i]).length){ analyticsEx = names[i]; break; }
+        if (exerciseHistory(names[i]).pts.length){ analyticsEx = names[i]; break; }
       }
     }
     h += '<div class="selectwrap" style="margin-top:14px"><select data-action="pick-ex" aria-label="Übung wählen">';
@@ -1027,7 +1071,9 @@
     });
     h += '</select></div>';
 
-    var pts = exerciseHistory(analyticsEx);
+    var hist = exerciseHistory(analyticsEx);
+    var pts = hist.pts;
+    var unit = hist.repsMode ? ' Wdh.' : ' kg';
     if (!pts.length){
       h += '<div class="empty">Für „' + esc(analyticsEx) + '“ ist noch nichts getrackt.</div>';
       return h;
@@ -1035,9 +1081,9 @@
 
     var first = pts[0].top, last = pts[pts.length-1].top, diff = Math.round((last-first)*100)/100;
     h += '<div class="stattiles">' +
-         '<div class="tile"><div class="tiny">Start</div><div class="v num">' + fmtW(first) + '<span style="font-size:13px;color:var(--ink2)"> kg</span></div></div>' +
-         '<div class="tile"><div class="tiny">Aktuell</div><div class="v num">' + fmtW(last) + '<span style="font-size:13px;color:var(--ink2)"> kg</span></div></div>' +
-         '<div class="tile"><div class="tiny">Entwicklung</div><div class="v num' + (diff>0?' up':'') + '">' + (diff>0?'+':'') + fmtW(diff) + '<span style="font-size:13px;color:var(--ink2)"> kg</span></div></div>' +
+         '<div class="tile"><div class="tiny">Start</div><div class="v num">' + fmtW(first) + '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span></div></div>' +
+         '<div class="tile"><div class="tiny">Aktuell</div><div class="v num">' + fmtW(last) + '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span></div></div>' +
+         '<div class="tile"><div class="tiny">Entwicklung</div><div class="v num' + (diff>0?' up':'') + '">' + (diff>0?'+':'') + fmtW(diff) + '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span></div></div>' +
          '</div>';
 
     if (pts.length === 1){
@@ -1045,9 +1091,9 @@
     } else {
       var tip = '';
       if (chartTip !== null && pts[chartTip]){
-        tip = fmtDM(pts[chartTip].date) + ' — ' + fmtW(pts[chartTip].top) + ' kg (' + fmtSets(pts[chartTip].sets) + ')';
+        tip = fmtDM(pts[chartTip].date) + ' — ' + fmtW(pts[chartTip].top) + unit + ' (' + fmtSets(pts[chartTip].sets) + ')';
       }
-      h += '<div class="card chartbox"><div class="tiny" style="margin-bottom:4px">Schwerster Satz pro Workout (kg)</div>' +
+      h += '<div class="card chartbox"><div class="tiny" style="margin-bottom:4px">' + (hist.repsMode ? 'Meiste Wiederholungen pro Workout' : 'Schwerster Satz pro Workout (kg)') + '</div>' +
            chartSVG(pts) +
            '<div class="tipbox">' + esc(tip || 'Tippe einen Punkt für Details') + '</div></div>';
     }
@@ -1057,7 +1103,7 @@
     pts.slice().reverse().forEach(function(p){
       h += '<div class="card" style="padding:12px 14px;margin-top:8px"><div class="row between">' +
            '<span class="sub">' + esc(fmtShort(p.date)) + '</span>' +
-           '<span class="num" style="font-weight:700">' + fmtW(p.top) + ' kg</span></div>' +
+           '<span class="num" style="font-weight:700">' + fmtW(p.top) + unit + '</span></div>' +
            '<div class="tiny num" style="margin-top:2px">' + esc(fmtSets(p.sets)) + '</div></div>';
     });
     return h;
@@ -1131,7 +1177,7 @@
         var cur = s1.w === null ? 0 : s1.w;
         s1.w = Math.max(0, Math.round((cur + (action==='w-inc'?1:-1))*100)/100);
         e1.touched = true;
-        save(); setPickDisplay(el, s1.w); break;
+        save(); updateWBtn(el, e1, +el.getAttribute('data-set'), s1.w); break;
       }
       case 'r-inc': case 'r-dec': {
         var e2 = d.entries[+el.getAttribute('data-ex')], s2 = e2.sets[+el.getAttribute('data-set')];
@@ -1173,7 +1219,8 @@
               if (isW) ps.w = value; else ps.r = (value === null ? null : Math.round(value));
               pe.touched = true;
               save();
-              el.textContent = value === null ? '–' : (isW ? fmtW(value) : value);
+              if (isW) updateWBtn(el, pe, +el.getAttribute('data-set'), value);
+              else el.textContent = value === null ? '–' : value;
             }
           );
         } else {
@@ -1254,6 +1301,12 @@
         var nm = (inp.value || '').trim();
         if (!nm){ inp.focus(); return; }
         d5.exercises.push({ id:uid(), name:nm, sets:3, reps:10 });
+        save(); view._keepScroll = true; render(); break;
+      }
+      case 'ex-toggle-bw': {
+        var dBW = findDay(findPlan(view.planId), view.dayId);
+        var exBW = dBW.exercises[+el.getAttribute('data-ex')];
+        exBW.bw = !exBW.bw;
         save(); view._keepScroll = true; render(); break;
       }
       case 'ex-del': {
