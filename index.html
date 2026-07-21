@@ -174,11 +174,19 @@
     font-size:15px; font-weight:600; padding:0; margin-bottom:14px; cursor:pointer;
   }
 
-  input[type="text"], select{
+  input[type="text"], input[type="date"], select{
     width:100%; background:var(--surface); color:var(--ink);
     border:1px solid var(--line); border-radius:12px;
     font-family:inherit; font-size:16px; padding:11px 12px;
-    appearance:none;
+    appearance:none; -webkit-appearance:none;
+  }
+  input[type="date"]{ min-height:46px; }
+  .listitem.breakitem{ border-style:dashed; cursor:default; }
+  .eyebrowrow{ display:flex; align-items:center; justify-content:space-between; margin-top:28px; }
+  .eyebrowrow .eyebrow{ margin:0; }
+  .minibtn{
+    border:1px solid var(--line); background:var(--surface); color:var(--ink2);
+    border-radius:999px; padding:6px 12px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
   }
   .selectwrap{ position:relative; }
   .selectwrap::after{
@@ -417,6 +425,7 @@
   if (!db || !db.plans) db = seed();
   if (!db.settings) db.settings = { theme:'auto', brightness:100 };
   if (!db.settings.accent) db.settings.accent = 'blue';
+  if (!db.breaks) db.breaks = [];
 
   function save(){
     try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e){ /* storage blocked: app keeps working in memory */ }
@@ -532,6 +541,14 @@
     if (cls) pb.classList.add(cls);
     pb.textContent = (w === null || w === undefined ? '–' : fmtW(w)) +
                      (cls === 'up' ? ' ▲' : cls === 'down' ? ' ▼' : '');
+  }
+  // "01.08. – 21.08.2026 · 3 Wochen" for a break entry
+  function breakLabel(b){
+    var days = Math.round((parseISO(b.to) - parseISO(b.from)) / 86400000) + 1;
+    var dur = days === 1 ? '1 Tag'
+            : (days % 7 === 0 ? (days / 7) + (days === 7 ? ' Woche' : ' Wochen') : days + ' Tage');
+    var range = b.from === b.to ? fmtShort(b.from) : fmtDM(b.from) + ' – ' + fmtShort(b.to);
+    return range + ' · ' + dur;
   }
   // "6–8" for a rep range, "10" for a single target
   function fmtRepsRange(ex){
@@ -721,18 +738,44 @@
       }
     }
 
-    // Archive
+    // Archive (Workouts + Pausen chronologisch gemischt)
     var sessions = sortedSessions();
-    h += '<div class="eyebrow" style="margin-top:28px">Archiv</div>';
-    if (!sessions.length){
+    h += '<div class="eyebrowrow"><span class="eyebrow">Archiv</span>' +
+         '<button class="minibtn" data-action="toggle-break-form">＋ Pause</button></div>';
+
+    if (view.addBreak){
+      var iso2 = todayISO();
+      h += '<div class="card">' +
+           '<div class="tiny">Von</div><input type="date" id="brFrom" value="' + iso2 + '">' +
+           '<div class="tiny" style="margin-top:10px">Bis</div><input type="date" id="brTo" value="' + iso2 + '">' +
+           '<div class="tiny" style="margin-top:10px">Grund (optional)</div>' +
+           '<input type="text" id="brNote" placeholder="z. B. Urlaub, krank">' +
+           '<button class="btn" data-action="save-break">Pause speichern</button>' +
+           '<button class="btn ghost" data-action="toggle-break-form">Abbrechen</button>' +
+           '</div>';
+    }
+
+    var items = sessions.map(function(s){ return { type:'s', date:s.date, s:s }; })
+      .concat(db.breaks.map(function(b){ return { type:'b', date:b.to, b:b }; }));
+    items.sort(function(a,b){ return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+
+    if (!items.length){
       h += '<div class="empty">Noch keine Workouts getrackt.<br>Dein erstes erscheint hier.</div>';
     } else {
-      sessions.forEach(function(s){
-        var nSets = 0;
-        s.entries.forEach(function(e){ nSets += e.sets.length; });
-        h += '<button class="listitem" data-action="open-session" data-id="' + s.id + '">' +
-             '<span><strong>' + esc(s.dayName) + '</strong><br><span class="sub">' + esc(fmtShort(s.date)) + ' · ' + s.entries.length + ' Übungen · ' + nSets + ' Sätze</span></span>' +
-             '<span class="chev">›</span></button>';
+      items.forEach(function(it){
+        if (it.type === 's'){
+          var s = it.s, nSets = 0;
+          s.entries.forEach(function(e){ nSets += e.sets.length; });
+          h += '<button class="listitem" data-action="open-session" data-id="' + s.id + '">' +
+               '<span><strong>' + esc(s.dayName) + '</strong><br><span class="sub">' + esc(fmtShort(s.date)) + ' · ' + s.entries.length + ' Übungen · ' + nSets + ' Sätze</span></span>' +
+               '<span class="chev">›</span></button>';
+        } else {
+          var b = it.b;
+          h += '<div class="listitem breakitem">' +
+               '<span><strong>Pause' + (b.note ? ' · ' + esc(b.note) : '') + '</strong><br><span class="sub">' + esc(breakLabel(b)) + '</span></span>' +
+               '<button class="iconbtn" data-action="del-break" data-id="' + b.id + '" aria-label="Pause löschen">✕</button>' +
+               '</div>';
+        }
       });
     }
     return h;
@@ -1177,6 +1220,24 @@
         view = { name:'track' }; render(); break;
       case 'open-session':
         view = { name:'session', id: el.getAttribute('data-id') }; render(); break;
+      case 'toggle-break-form':
+        view.addBreak = !view.addBreak;
+        view._keepScroll = true; render(); break;
+      case 'save-break': {
+        var bFrom = document.getElementById('brFrom').value;
+        var bTo = document.getElementById('brTo').value;
+        var bNote = (document.getElementById('brNote').value || '').trim();
+        if (!bFrom || !bTo){ toast('Bitte beide Daten wählen'); break; }
+        if (bTo < bFrom){ var tmpB = bFrom; bFrom = bTo; bTo = tmpB; }
+        db.breaks.push({ id:uid(), from:bFrom, to:bTo, note:bNote });
+        save();
+        view.addBreak = false;
+        render(); toast('Pause eingetragen ✓'); break;
+      }
+      case 'del-break':
+        rememberForUndo();
+        db.breaks = db.breaks.filter(function(b){ return b.id !== el.getAttribute('data-id'); });
+        save(); view._keepScroll = true; render(); toast('Pause gelöscht', true); break;
       case 'del-session':
         rememberForUndo();
         db.sessions = db.sessions.filter(function(s){ return s.id !== el.getAttribute('data-id'); });
