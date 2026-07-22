@@ -350,6 +350,38 @@
   .tab.active{ color:var(--accent); }
   .tab svg{ width:24px; height:24px; }
 
+  /* Pausen-Timer: Leiste direkt über der Tab-Leiste */
+  #resttimer{
+    position:fixed; left:0; right:0; z-index:12;
+    background:color-mix(in srgb, var(--surface) 94%, transparent);
+    -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+    border-top:1px solid var(--line);
+  }
+  #resttimer[hidden]{ display:none; }
+  #restfill{
+    height:3px; width:100%; background:var(--accent);
+    transition:width .95s linear;
+  }
+  #resttimer.over #restfill{ background:var(--up); width:100% !important; }
+  .restrow{
+    max-width:460px; margin:0 auto; display:flex; align-items:center; gap:10px;
+    padding:8px 18px 10px;
+  }
+  #restlabel{ font-size:13px; font-weight:600; color:var(--ink2); }
+  #restclock{
+    font-family:ui-rounded, -apple-system, system-ui, sans-serif;
+    font-size:22px; font-weight:800; letter-spacing:-.01em; color:var(--ink);
+    font-variant-numeric:tabular-nums; margin-right:auto;
+  }
+  #resttimer.over #restclock, #resttimer.over #restlabel{ color:var(--up); }
+  .restbtn{
+    border:1px solid var(--line); background:var(--surface); color:var(--ink2);
+    border-radius:999px; padding:7px 13px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .restbtn.icon{ padding:7px 11px; }
+  body.with-rest #app{ padding-bottom:calc(152px + env(safe-area-inset-bottom)); }
+  body.with-rest #toast{ bottom:calc(146px + env(safe-area-inset-bottom)); }
+
   /* Toast */
   #toast{
     position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom));
@@ -398,6 +430,16 @@
   </div>
 </nav>
 
+<div id="resttimer" hidden>
+  <div id="restfill"></div>
+  <div class="restrow">
+    <span id="restlabel">Pause</span>
+    <span id="restclock">0:00</span>
+    <button class="restbtn" id="restplus">+30 s</button>
+    <button class="restbtn icon" id="reststop" aria-label="Pause beenden">✕</button>
+  </div>
+</div>
+
 <div id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo">Rückgängig</button></div>
 
 <div id="picker" hidden>
@@ -420,7 +462,7 @@
   var uid = function(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); };
 
   function seed(){
-    var ex = function(name, sets, reps, repsMax, bw){ return { id:uid(), name:name, sets:sets, reps:reps, repsMax:repsMax || null, bw:!!bw, mode: bw ? 'bw' : 'weight' }; };
+    var ex = function(name, sets, reps, repsMax, bw, rest){ return { id:uid(), name:name, sets:sets, reps:reps, repsMax:repsMax || null, bw:!!bw, mode: bw ? 'bw' : 'weight', rest: rest == null ? 90 : rest }; };
     var plan = {
       id: uid(), name: '3-Day Split',
       days: [
@@ -570,6 +612,14 @@
     var range = b.from === b.to ? fmtShort(b.from) : fmtDM(b.from) + ' – ' + fmtShort(b.to);
     return range + ' · ' + dur;
   }
+  // Pausenzeit einer Übung (Standard 90 s, 0 = aus) und Anzeige als "1:30"
+  function exRest(x){
+    return (x && x.rest != null) ? x.rest : 90;
+  }
+  function fmtTime(sec){
+    sec = Math.max(0, Math.round(sec));
+    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  }
   // "6–8" for a rep range, "10" for a single target
   function fmtRepsRange(ex){
     return (ex.repsMax != null && ex.repsMax > ex.reps) ? ex.reps + '–' + ex.repsMax : String(ex.reps);
@@ -593,12 +643,13 @@
   var ITEM_H = 40;
   var pickerCtx = null; // { values, onDone }
 
-  function openPicker(title, values, cur, unit, onDone){
+  function openPicker(title, values, cur, unit, onDone, fmtFn){
     pickerCtx = { values: values, onDone: onDone };
+    var lbl = fmtFn || fmtW;
     var html = '';
     for (var i = 0; i < values.length; i++){
       html += '<div class="pickerItem" data-i="' + i + '">' +
-              (values[i] === null ? '–' : fmtW(values[i])) +
+              (values[i] === null ? '–' : lbl(values[i])) +
               (unit && values[i] !== null ? '<span class="pickerUnit">' + unit + '</span>' : '') +
               '</div>';
     }
@@ -653,6 +704,102 @@
     var pct = Math.round(p.done / p.total * 100);
     document.getElementById('progressfill').style.width = pct + '%';
     bar.setAttribute('aria-valuenow', String(pct));
+  }
+
+  /* ---- Pausen-Timer ---- */
+  var restTick = null;
+  var audioCtx = null;
+
+  // AudioContext beim ersten Tippen freischalten (iOS erlaubt Ton nur nach Geste)
+  function unlockAudio(){
+    try {
+      if (!audioCtx){
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch(e){ /* kein Ton verfügbar */ }
+  }
+  function beep(){
+    if (!audioCtx) return;
+    try {
+      var t0 = audioCtx.currentTime;
+      [0, 0.3].forEach(function(off){
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, t0 + off);
+        g.gain.exponentialRampToValueAtTime(0.4, t0 + off + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.24);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t0 + off); o.stop(t0 + off + 0.26);
+      });
+    } catch(e){ /* Ton fehlgeschlagen */ }
+  }
+
+  function startRest(seconds, name){
+    if (!seconds) return;
+    unlockAudio();
+    db.rest = { endsAt: Date.now() + seconds * 1000, total: seconds, name: name || '', rang: false };
+    save();
+    tickRest();
+    if (restTick) clearInterval(restTick);
+    restTick = setInterval(tickRest, 250);
+  }
+  function stopRest(){
+    db.rest = null; save();
+    if (restTick){ clearInterval(restTick); restTick = null; }
+    tickRest();
+  }
+  function tickRest(){
+    var el = document.getElementById('resttimer');
+    var r = db.rest;
+    if (!r){
+      el.hidden = true;
+      document.body.classList.remove('with-rest');
+      return;
+    }
+    el.hidden = false;
+    document.body.classList.add('with-rest');
+    el.style.bottom = document.getElementById('tabbar').offsetHeight + 'px';
+
+    var left = (r.endsAt - Date.now()) / 1000;
+    if (left <= 0){
+      if (!r.rang){ r.rang = true; save(); beep(); }
+      if (left < -25){ stopRest(); return; }   // nach 25 s von selbst ausblenden
+      el.classList.add('over');
+      document.getElementById('restlabel').textContent = 'Pause vorbei' + (r.name ? ' · ' + r.name : '');
+      document.getElementById('restclock').textContent = '0:00';
+      return;
+    }
+    el.classList.remove('over');
+    document.getElementById('restlabel').textContent = r.name || 'Pause';
+    document.getElementById('restclock').textContent = fmtTime(left);
+    document.getElementById('restfill').style.width = Math.min(100, left / r.total * 100) + '%';
+  }
+
+  document.getElementById('restplus').addEventListener('click', function(){
+    if (!db.rest) return;
+    var base = Math.max(Date.now(), db.rest.endsAt);
+    db.rest.endsAt = base + 30000;
+    db.rest.total += 30;
+    db.rest.rang = false;
+    save(); tickRest();
+    if (!restTick) restTick = setInterval(tickRest, 250);
+  });
+  document.getElementById('reststop').addEventListener('click', stopRest);
+
+  // Pausenzeit live aus dem Plan lesen, damit Plan-Änderungen sofort greifen
+  function entryRest(e){
+    var d = db.draft;
+    if (d){
+      var day = findDay(findPlan(d.planId), d.dayId);
+      if (day){
+        for (var i = 0; i < day.exercises.length; i++){
+          if (day.exercises[i].id === e.exId) return exRest(day.exercises[i]);
+        }
+      }
+    }
+    return exRest(e);
   }
 
   var undoSnapshot = null;
@@ -852,7 +999,7 @@
       }
       var mode = exMode(ex);
       return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
-               bw: mode === 'bw', mode: mode,
+               bw: mode === 'bw', mode: mode, rest: exRest(ex),
                target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
                last:last ? { sets:last.sets, date:last.date } : null };
     });
@@ -896,9 +1043,11 @@
              '</div>' +
              '</div>';
       });
+      var eRest = entryRest(e);
       h += '<div class="setactions">' +
            '<button data-action="add-set" data-ex="' + ei + '">＋ Satz</button>' +
            (e.sets.length > 1 ? '<button data-action="rem-set" data-ex="' + ei + '">− Satz</button>' : '') +
+           (eRest ? '<button data-action="start-rest" data-ex="' + ei + '">⏱ ' + fmtTime(eRest) + '</button>' : '') +
            '</div>' +
            '<button class="donebtn" data-action="toggle-done" data-ex="' + ei + '">' +
            (e.done ? '✓ Erledigt' : 'Übung abhaken') + '</button>' +
@@ -924,6 +1073,7 @@
     if (!entries.length){ toast('Nichts eingetragen — hake mindestens eine Übung ab'); return; }
     db.sessions.push({ id:uid(), ts:Date.now(), date:d.date, planName:(findPlan(d.planId)||{}).name || '', dayName:d.dayName, entries:entries });
     db.draft = null;
+    stopRest();
     save();
     view = { name:'home' };
     render();
@@ -1055,6 +1205,12 @@
              '<span class="tiny">bis</span>' +
              '<button class="miniinput" data-action="pick" data-field="ex-reps-max" data-ex="' + i + '" aria-label="Wiederholungen bis">' + (ex.repsMax != null ? ex.repsMax : '–') + '</button>' +
              '<span class="tiny">Wdh.</span>' +
+           '</div>' +
+           '<div class="row" style="margin-top:8px">' +
+             '<span class="tiny">Pause:</span>' +
+             '<button class="miniinput" style="width:64px" data-action="pick" data-field="ex-rest" data-ex="' + i + '" aria-label="Pausenzeit wählen">' +
+               (exRest(ex) ? fmtTime(exRest(ex)) : 'aus') + '</button>' +
+             '<span class="tiny">zwischen den Sätzen</span>' +
            '</div>' +
            '<div class="chips" style="margin-top:10px">' +
            [['weight','Mit Gewicht'],['bw','Bodyweight'],['bwplus','Bodyweight + kg']].map(function(m){
@@ -1331,7 +1487,13 @@
       case 'toggle-done': {
         var e5 = d.entries[+el.getAttribute('data-ex')];
         e5.done = !e5.done;
-        save(); view._keepScroll = true; render(); break;
+        save();
+        if (e5.done) startRest(entryRest(e5), e5.name);   // Pause startet automatisch
+        view._keepScroll = true; render(); break;
+      }
+      case 'start-rest': {
+        var e6 = d.entries[+el.getAttribute('data-ex')];
+        startRest(entryRest(e6), e6.name); break;
       }
       case 'pick': {
         var field = el.getAttribute('data-field');
@@ -1369,6 +1531,14 @@
                 if (pex.repsMax != null && pex.repsMax <= value) pex.repsMax = null; // range collapsed
                 save(); view._keepScroll = true; render();
               });
+          } else if (field === 'ex-rest'){
+            openPicker(pex.name + ' · Pause zwischen den Sätzen',
+              [0,15,30,45,60,75,90,105,120,135,150,180,210,240,300], exRest(pex), '',
+              function(value){
+                pex.rest = value;
+                save(); view._keepScroll = true; render();
+              },
+              function(v){ return v === 0 ? 'aus' : fmtTime(v); });
           } else if (field === 'ex-reps-max'){
             openPicker(pex.name + ' · Wiederholungen (bis)', rangeVals(pex.reps + 1, 50, 1, true, pex.repsMax != null ? pex.repsMax : null), pex.repsMax != null ? pex.repsMax : null, 'Wdh.',
               function(value){
@@ -1382,7 +1552,7 @@
       case 'finish': finishWorkout(); break;
       case 'discard':
         rememberForUndo();
-        db.draft = null; save(); view = { name:'home' }; render(); toast('Workout verworfen', true); break;
+        db.draft = null; stopRest(); save(); view = { name:'home' }; render(); toast('Workout verworfen', true); break;
 
       /* plans */
       case 'open-plan':
@@ -1543,6 +1713,15 @@
   }
   applySettings();
   render();
+
+  // laufende Pause nach App-Neustart weiterlaufen lassen
+  if (db.rest){
+    tickRest();
+    restTick = setInterval(tickRest, 250);
+  }
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden && db.rest) tickRest();
+  });
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(function(){ /* offline support unavailable */ });
