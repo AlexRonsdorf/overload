@@ -393,7 +393,8 @@
   #restfill{ height:100%; width:100%; background:var(--accent); transition:width .95s linear; }
   #resttimer.over #restclock, #resttimer.over #restlabel{ color:var(--up); }
   #resttimer.over #restfill{ background:var(--up); width:100% !important; }
-  .restbtns{ display:flex; gap:12px; margin-top:26px; align-items:center; }
+  .restbtns{ display:flex; gap:12px; margin-top:14px; align-items:center; justify-content:center; }
+  .restbtns:first-of-type{ margin-top:26px; }
   .restbtn{
     border:1px solid var(--line); background:var(--surface); color:var(--ink);
     border-radius:999px; padding:13px 20px; font-family:inherit; font-size:16px; font-weight:700; cursor:pointer;
@@ -454,8 +455,11 @@
   <div id="restclock">0:00</div>
   <div id="restprog"><div id="restfill"></div></div>
   <div class="restbtns">
-    <button class="restbtn" id="restplus">+30 s</button>
-    <button class="restbtn primary" id="reststop">Weiter</button>
+    <button class="restbtn" id="restminus">−15 s</button>
+    <button class="restbtn" id="restplus">+15 s</button>
+  </div>
+  <div class="restbtns">
+    <button class="restbtn primary" id="reststop">Pause beenden</button>
   </div>
 </div>
 
@@ -844,15 +848,21 @@
     document.getElementById('restfill').style.width = Math.min(100, left / r.total * 100) + '%';
   }
 
-  document.getElementById('restplus').addEventListener('click', function(){
+  // Pause während des Laufens in 15-s-Schritten anpassen
+  function restAdjust(delta){
     if (!db.rest) return;
-    var base = Math.max(Date.now(), db.rest.endsAt);
-    db.rest.endsAt = base + 30000;
-    db.rest.total += 30;
+    var now = Date.now();
+    var base = Math.max(0, (db.rest.endsAt - now) / 1000);
+    var newLeft = base + delta;
+    if (newLeft <= 0){ stopRest(); return; }   // auf 0 reduziert = Pause beenden
+    db.rest.endsAt = now + newLeft * 1000;
+    if (newLeft > db.rest.total) db.rest.total = newLeft;
     db.rest.rang = false;
     save(); tickRest();
     if (!restTick) restTick = setInterval(tickRest, 250);
-  });
+  }
+  document.getElementById('restplus').addEventListener('click', function(){ restAdjust(15); });
+  document.getElementById('restminus').addEventListener('click', function(){ restAdjust(-15); });
   document.getElementById('reststop').addEventListener('click', stopRest);
 
   // Pausenzeit live aus dem Plan lesen, damit Plan-Änderungen sofort greifen
