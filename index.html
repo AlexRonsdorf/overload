@@ -207,19 +207,28 @@
   .excard{ padding:14px 14px 12px; }
   .exname{ font-size:17px; font-weight:700; }
   .lastline{ font-size:13px; color:var(--ink2); margin-top:2px; }
-  .setrow{ display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .setrow{ display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .setnum{ width:20px; flex:none; font-size:13px; color:var(--ink3); font-weight:600; }
+  .restmini{
+    flex:none; border:1px solid var(--line); background:var(--surface2); color:var(--ink2);
+    border-radius:12px; height:44px; padding:0 8px; cursor:pointer;
+    font-family:inherit; font-size:11.5px; font-weight:700; white-space:nowrap;
+    display:flex; align-items:center; gap:2px; font-variant-numeric:tabular-nums;
+  }
+  .restmini:active{ background:var(--line); }
   .stepgroup{
-    display:flex; align-items:center; gap:0; flex:1;
+    display:flex; align-items:center; gap:0; flex:1 1 150px; min-width:132px;
     background:var(--surface2); border-radius:12px; overflow:hidden;
   }
+  .stepgroup.reps{ flex:0 0 104px; min-width:104px; }
   .stepbtn{
-    width:38px; height:44px; flex:none; border:none; background:none;
+    width:33px; height:44px; flex:none; border:none; background:none;
     color:var(--ink2); font-size:20px; font-weight:600; cursor:pointer; font-family:inherit;
   }
   .stepbtn:active{ background:var(--line); }
   .stepval{
     flex:1; min-width:0; height:44px; border:none; background:none; text-align:center;
+    white-space:nowrap;
     font-family:ui-rounded, -apple-system, system-ui, sans-serif;
     font-size:17px; font-weight:700; color:var(--ink); padding:0;
     font-variant-numeric:tabular-nums; cursor:pointer;
@@ -239,8 +248,15 @@
   }
   @keyframes pickerUp{ from{ transform:translateY(40px); opacity:.4; } to{ transform:none; opacity:1; } }
   @media (prefers-reduced-motion: reduce){ #pickerPanel{ animation:none; } }
-  .pickerHead{ display:flex; justify-content:space-between; align-items:center; padding:6px 2px; }
-  #pickerTitle{ font-size:13px; font-weight:600; color:var(--ink2); }
+  .pickerHead{ display:flex; align-items:center; gap:10px; padding:6px 2px; }
+  #pickerTitle{ font-size:13px; font-weight:600; color:var(--ink2); flex:1; min-width:0; }
+  #pickerInput{
+    width:88px; text-align:center; background:var(--surface2); border:1px solid var(--line);
+    border-radius:10px; padding:8px 6px; -webkit-appearance:none; appearance:none;
+    font-family:ui-rounded, -apple-system, system-ui, sans-serif; font-size:17px; font-weight:700;
+    color:var(--ink); font-variant-numeric:tabular-nums;
+  }
+  #pickerInput[hidden]{ display:none; }
   #pickerDone{
     border:none; background:none; color:var(--accent); font-family:inherit;
     font-size:16px; font-weight:800; padding:6px 4px; cursor:pointer;
@@ -265,7 +281,7 @@
     font-size:20px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums;
   }
   .pickerUnit{ font-size:12px; color:var(--ink3); font-weight:600; }
-  .unit{ font-size:11px; color:var(--ink3); font-weight:600; flex:none; padding-right:9px; }
+  .unit{ font-size:11px; color:var(--ink3); font-weight:600; flex:none; padding-right:7px; }
   .donebtn{
     width:100%; margin-top:12px; border:none; border-radius:12px; cursor:pointer;
     font-family:inherit; font-size:15px; font-weight:700; padding:11px;
@@ -303,6 +319,8 @@
     border-radius:10px; color:var(--ink2); font-size:15px; cursor:pointer; font-family:inherit;
   }
   .iconbtn:disabled{ opacity:.35; cursor:default; }
+  .restlist{ display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:8px; }
+  .restpick{ display:flex; align-items:center; gap:6px; }
 
   /* Stats + chart */
   .stattiles{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:14px; }
@@ -445,7 +463,7 @@
 <div id="picker" hidden>
   <div id="pickerBackdrop"></div>
   <div id="pickerPanel">
-    <div class="pickerHead"><span id="pickerTitle"></span><button id="pickerDone">Fertig</button></div>
+    <div class="pickerHead"><span id="pickerTitle"></span><input id="pickerInput" inputmode="decimal" hidden><button id="pickerDone">Fertig</button></div>
     <div class="wheelwrap">
       <div id="pickerBar"></div>
       <div id="pickerWheel"><div id="pickerItems"></div></div>
@@ -581,29 +599,33 @@
     if (!last) return 'Erstes Mal — noch keine Daten';
     return 'Letztes Mal (' + fmtDM(last.date) + '): ' + fmtSets(last.sets, mode);
   }
-  // compares a set's weight with last time (same set number, otherwise last top set)
-  function weightDeltaClass(e, si, w){
-    if (!e.last || w === null || w === undefined) return '';
-    var ref = e.last.sets[si] ? e.last.sets[si].w : null;
-    if (ref === null || ref === undefined){
+  // compares a set's value with last time. field 'w' = weight, 'r' = reps.
+  // weight falls back to last workout's top set; reps compare same set number.
+  function setDelta(e, si, field, val){
+    if (!e.last || val === null || val === undefined) return '';
+    var ref = e.last.sets[si] ? e.last.sets[si][field] : null;
+    if (field === 'w' && (ref === null || ref === undefined)){
       ref = 0;
       for (var i=0;i<e.last.sets.length;i++) ref = Math.max(ref, e.last.sets[i].w || 0);
     }
-    if (w > ref) return 'up';
-    if (w < ref) return 'down';
+    if (ref === null || ref === undefined) return '';
+    if (val > ref) return 'up';
+    if (val < ref) return 'down';
     return '';
   }
-  // updates a weight button's number, color and arrow in place
-  function updateWBtn(btn, e, si, w){
+  function weightDeltaClass(e, si, w){ return setDelta(e, si, 'w', w); }
+  // updates a value button's number, colour and arrow in place
+  function updateValBtn(btn, e, si, field, val){
     var group = btn.closest('.stepgroup');
-    var pb = group ? group.querySelector('[data-action="pick"]') : btn;
+    var pb = group ? group.querySelector('[data-action="pick"][data-field="' + field + '"]') : btn;
     if (!pb) return;
-    var cls = weightDeltaClass(e, si, w);
+    var cls = setDelta(e, si, field, val);
     pb.classList.remove('up','down');
     if (cls) pb.classList.add(cls);
-    pb.textContent = (w === null || w === undefined ? '–' : fmtW(w)) +
-                     (cls === 'up' ? ' ▲' : cls === 'down' ? ' ▼' : '');
+    var txt = (val === null || val === undefined) ? '–' : (field === 'w' ? fmtW(val) : val);
+    pb.textContent = txt + (cls === 'up' ? ' ▲' : cls === 'down' ? ' ▼' : '');
   }
+  function updateWBtn(btn, e, si, w){ updateValBtn(btn, e, si, 'w', w); }
   // "01.08. – 21.08.2026 · 3 Wochen" for a break entry
   function breakLabel(b){
     var days = Math.round((parseISO(b.to) - parseISO(b.from)) / 86400000) + 1;
@@ -615,6 +637,12 @@
   // Pausenzeit einer Übung (Standard 90 s, 0 = aus) und Anzeige als "1:30"
   function exRest(x){
     return (x && x.rest != null) ? x.rest : 90;
+  }
+  // Pausenzeit für einen bestimmten Satz (Array x.rests), sonst letzter Wert bzw. Einzelwert
+  function restForSet(x, si){
+    if (x.rests && x.rests[si] != null) return x.rests[si];
+    if (x.rests && x.rests.length) return x.rests[x.rests.length - 1];
+    return exRest(x);
   }
   function fmtTime(sec){
     sec = Math.max(0, Math.round(sec));
@@ -643,8 +671,9 @@
   var ITEM_H = 40;
   var pickerCtx = null; // { values, onDone }
 
-  function openPicker(title, values, cur, unit, onDone, fmtFn){
-    pickerCtx = { values: values, onDone: onDone };
+  // opts.type ('weight'|'reps') enables the type-in field next to the wheel
+  function openPicker(title, values, cur, unit, onDone, fmtFn, opts){
+    pickerCtx = { values: values, onDone: onDone, type: (opts && opts.type) || null };
     var lbl = fmtFn || fmtW;
     var html = '';
     for (var i = 0; i < values.length; i++){
@@ -655,6 +684,14 @@
     }
     document.getElementById('pickerTitle').textContent = title;
     document.getElementById('pickerItems').innerHTML = html;
+    var inp = document.getElementById('pickerInput');
+    if (pickerCtx.type){
+      inp.hidden = false;
+      inp.setAttribute('inputmode', pickerCtx.type === 'weight' ? 'decimal' : 'numeric');
+      inp.value = (cur === null || cur === undefined) ? '' : (pickerCtx.type === 'weight' ? fmtW(cur) : cur);
+    } else {
+      inp.hidden = true; inp.value = '';
+    }
     document.getElementById('picker').hidden = false;
     var idx = 0;
     for (var j = 0; j < values.length; j++){
@@ -668,6 +705,18 @@
     var wheel = document.getElementById('pickerWheel');
     var idx = Math.max(0, Math.min(pickerCtx.values.length - 1, Math.round(wheel.scrollTop / ITEM_H)));
     var value = pickerCtx.values[idx];
+    // a typed number wins over the wheel position
+    var inp = document.getElementById('pickerInput');
+    if (pickerCtx.type && !inp.hidden){
+      var raw = (inp.value || '').trim();
+      if (raw !== ''){
+        var num = parseNum(raw);
+        if (num !== null){
+          num = Math.max(0, num);
+          value = pickerCtx.type === 'weight' ? Math.round(num * 2) / 2 : Math.round(num);
+        }
+      }
+    }
     var done = pickerCtx.onDone;
     pickerCtx = null;
     document.getElementById('picker').hidden = true;
@@ -679,6 +728,24 @@
     var item = ev.target.closest('.pickerItem');
     if (!item) return;
     document.getElementById('pickerWheel').scrollTo({ top: (+item.getAttribute('data-i')) * ITEM_H, behavior: 'smooth' });
+  });
+  // keep the type-in field in sync while scrolling the wheel (unless it's being typed in)
+  var pickerScrollT = null;
+  document.getElementById('pickerWheel').addEventListener('scroll', function(){
+    if (!pickerCtx || !pickerCtx.type) return;
+    var inp = document.getElementById('pickerInput');
+    if (document.activeElement === inp) return;
+    clearTimeout(pickerScrollT);
+    pickerScrollT = setTimeout(function(){
+      if (!pickerCtx) return;
+      var wheel = document.getElementById('pickerWheel');
+      var idx = Math.max(0, Math.min(pickerCtx.values.length - 1, Math.round(wheel.scrollTop / ITEM_H)));
+      var v = pickerCtx.values[idx];
+      inp.value = (v === null || v === undefined) ? '' : (pickerCtx.type === 'weight' ? fmtW(v) : v);
+    }, 80);
+  });
+  document.getElementById('pickerInput').addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter'){ ev.preventDefault(); this.blur(); closePicker(); }
   });
 
   /* ---------- View state ---------- */
@@ -789,17 +856,19 @@
   document.getElementById('reststop').addEventListener('click', stopRest);
 
   // Pausenzeit live aus dem Plan lesen, damit Plan-Änderungen sofort greifen
-  function entryRest(e){
+  function entryRestForSet(e, si){
     var d = db.draft;
     if (d){
       var day = findDay(findPlan(d.planId), d.dayId);
       if (day){
         for (var i = 0; i < day.exercises.length; i++){
-          if (day.exercises[i].id === e.exId) return exRest(day.exercises[i]);
+          if (day.exercises[i].id === e.exId) return restForSet(day.exercises[i], si);
         }
       }
     }
-    return exRest(e);
+    if (e.rests && e.rests[si] != null) return e.rests[si];
+    if (e.rests && e.rests.length) return e.rests[e.rests.length - 1];
+    return e.rest != null ? e.rest : 90;
   }
 
   var undoSnapshot = null;
@@ -999,7 +1068,7 @@
       }
       var mode = exMode(ex);
       return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
-               bw: mode === 'bw', mode: mode, rest: exRest(ex),
+               bw: mode === 'bw', mode: mode, rest: exRest(ex), rests: (ex.rests ? ex.rests.slice() : null),
                target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
                last:last ? { sets:last.sets, date:last.date } : null };
     });
@@ -1024,7 +1093,8 @@
            (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
            '<div class="lastline">' + esc(summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>';
       e.sets.forEach(function(s, si){
-        var wCls = e.bw ? '' : weightDeltaClass(e, si, s.w);
+        var wCls = e.bw ? '' : setDelta(e, si, 'w', s.w);
+        var rCls = setDelta(e, si, 'r', s.r);
         h += '<div class="setrow">' +
              '<span class="setnum num">' + (si+1) + '</span>' +
              (e.bw ? '' :
@@ -1035,19 +1105,19 @@
                '<span class="unit">' + (e.mode === 'bwplus' ? '+KG' : 'KG') + '</span>' +
                '<button class="stepbtn" data-action="w-inc" data-ex="' + ei + '" data-set="' + si + '" aria-label="Gewicht plus">+</button>' +
              '</div>') +
-             '<div class="stepgroup"' + (e.bw ? '' : ' style="max-width:132px"') + '>' +
+             '<div class="stepgroup' + (e.bw ? '' : ' reps') + '">' +
                '<button class="stepbtn" data-action="r-dec" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen minus">−</button>' +
-               '<button class="stepval" data-action="pick" data-field="r" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen wählen">' + (s.r === null ? '–' : s.r) + '</button>' +
+               '<button class="stepval' + (rCls ? ' ' + rCls : '') + '" data-action="pick" data-field="r" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen wählen">' +
+                 (s.r === null ? '–' : s.r) + (rCls === 'up' ? ' ▲' : rCls === 'down' ? ' ▼' : '') + '</button>' +
                '<span class="unit">WDH</span>' +
                (e.bw ? '<button class="stepbtn" data-action="r-inc" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen plus">+</button>' : '') +
              '</div>' +
+             (entryRestForSet(e, si) ? '<button class="restmini" data-action="start-rest" data-ex="' + ei + '" data-set="' + si + '" aria-label="Pause nach Satz ' + (si+1) + '">⏱ ' + fmtTime(entryRestForSet(e, si)) + '</button>' : '') +
              '</div>';
       });
-      var eRest = entryRest(e);
       h += '<div class="setactions">' +
            '<button data-action="add-set" data-ex="' + ei + '">＋ Satz</button>' +
            (e.sets.length > 1 ? '<button data-action="rem-set" data-ex="' + ei + '">− Satz</button>' : '') +
-           (eRest ? '<button data-action="start-rest" data-ex="' + ei + '">⏱ ' + fmtTime(eRest) + '</button>' : '') +
            '</div>' +
            '<button class="donebtn" data-action="toggle-done" data-ex="' + ei + '">' +
            (e.done ? '✓ Erledigt' : 'Übung abhaken') + '</button>' +
@@ -1206,11 +1276,20 @@
              '<button class="miniinput" data-action="pick" data-field="ex-reps-max" data-ex="' + i + '" aria-label="Wiederholungen bis">' + (ex.repsMax != null ? ex.repsMax : '–') + '</button>' +
              '<span class="tiny">Wdh.</span>' +
            '</div>' +
-           '<div class="row" style="margin-top:8px">' +
-             '<span class="tiny">Pause:</span>' +
-             '<button class="miniinput" style="width:64px" data-action="pick" data-field="ex-rest" data-ex="' + i + '" aria-label="Pausenzeit wählen">' +
-               (exRest(ex) ? fmtTime(exRest(ex)) : 'aus') + '</button>' +
-             '<span class="tiny">zwischen den Sätzen</span>' +
+           '<div style="margin-top:10px">' +
+             '<span class="tiny">Pause nach Satz:</span>' +
+             '<div class="restlist">' +
+             (function(){
+               var out = '';
+               for (var si = 0; si < ex.sets; si++){
+                 var rv = restForSet(ex, si);
+                 out += '<span class="restpick"><span class="tiny num">' + (si+1) + '.</span>' +
+                        '<button class="miniinput" style="width:58px" data-action="pick" data-field="ex-rest" data-ex="' + i + '" data-set="' + si + '" aria-label="Pause nach Satz ' + (si+1) + '">' +
+                        (rv ? fmtTime(rv) : 'aus') + '</button></span>';
+               }
+               return out;
+             })() +
+             '</div>' +
            '</div>' +
            '<div class="chips" style="margin-top:10px">' +
            [['weight','Mit Gewicht'],['bw','Bodyweight'],['bwplus','Bodyweight + kg']].map(function(m){
@@ -1469,7 +1548,7 @@
         var cr = s2.r === null ? 0 : s2.r;
         s2.r = Math.max(0, cr + (action==='r-inc'?1:-1));
         e2.touched = true;
-        save(); setPickDisplay(el, s2.r); break;
+        save(); updateValBtn(el, e2, +el.getAttribute('data-set'), 'r', s2.r); break;
       }
       case 'add-set': {
         var e3 = d.entries[+el.getAttribute('data-ex')];
@@ -1488,12 +1567,13 @@
         var e5 = d.entries[+el.getAttribute('data-ex')];
         e5.done = !e5.done;
         save();
-        if (e5.done) startRest(entryRest(e5), e5.name);   // Pause startet automatisch
+        if (e5.done) startRest(entryRestForSet(e5, e5.sets.length - 1), e5.name);  // Pause des letzten Satzes
         view._keepScroll = true; render(); break;
       }
       case 'start-rest': {
         var e6 = d.entries[+el.getAttribute('data-ex')];
-        startRest(entryRest(e6), e6.name); break;
+        var rsi = +el.getAttribute('data-set');
+        startRest(entryRestForSet(e6, rsi), e6.name + ' · Satz ' + (rsi + 1)); break;
       }
       case 'pick': {
         var field = el.getAttribute('data-field');
@@ -1510,9 +1590,9 @@
               if (isW) ps.w = value; else ps.r = (value === null ? null : Math.round(value));
               pe.touched = true;
               save();
-              if (isW) updateWBtn(el, pe, +el.getAttribute('data-set'), value);
-              else el.textContent = value === null ? '–' : value;
-            }
+              updateValBtn(el, pe, +el.getAttribute('data-set'), field, isW ? value : (value === null ? null : Math.round(value)));
+            },
+            null, { type: isW ? 'weight' : 'reps' }
           );
         } else {
           var pdDay = findDay(findPlan(view.planId), view.dayId);
@@ -1532,10 +1612,13 @@
                 save(); view._keepScroll = true; render();
               });
           } else if (field === 'ex-rest'){
-            openPicker(pex.name + ' · Pause zwischen den Sätzen',
-              [0,15,30,45,60,75,90,105,120,135,150,180,210,240,300], exRest(pex), '',
+            var rsi = +el.getAttribute('data-set');
+            openPicker(pex.name + ' · Pause nach Satz ' + (rsi + 1),
+              [0,15,30,45,60,75,90,105,120,135,150,180,210,240,300], restForSet(pex, rsi), '',
               function(value){
-                pex.rest = value;
+                if (!pex.rests) pex.rests = [];
+                while (pex.rests.length < pex.sets){ pex.rests.push(restForSet(pex, pex.rests.length)); }
+                pex.rests[rsi] = value;
                 save(); view._keepScroll = true; render();
               },
               function(v){ return v === 0 ? 'aus' : fmtTime(v); });
