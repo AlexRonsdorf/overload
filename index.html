@@ -290,8 +290,15 @@
     font-family:inherit; font-size:15px; font-weight:700; padding:11px;
     background:var(--surface2); color:var(--ink2);
   }
-  .excard.done{ border-color:var(--accent); }
-  .excard.done .donebtn{ background:var(--accent-soft); color:var(--accent); }
+  .excard.done{ border-color:color-mix(in srgb, var(--up) 55%, transparent); }
+  .excard.done .donebtn{ background:color-mix(in srgb, var(--up) 16%, transparent); color:var(--up); }
+  /* aktuelle Übung: deutlich umrandet */
+  .excard.current{ border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent); }
+  .nowtag{
+    display:inline-block; margin-left:8px; vertical-align:2px;
+    background:var(--accent); color:var(--accent-ink); border-radius:999px;
+    font-size:10px; font-weight:800; letter-spacing:.06em; padding:3px 8px;
+  }
   .setactions{ display:flex; gap:8px; margin-top:10px; }
   .setactions button{
     flex:1; border:none; border-radius:10px; background:none; border:1px dashed var(--line);
@@ -393,6 +400,16 @@
   #restfill{ height:100%; width:100%; background:var(--accent); transition:width .95s linear; }
   #resttimer.over #restclock, #resttimer.over #restlabel{ color:var(--up); }
   #resttimer.over #restfill{ background:var(--up); width:100% !important; }
+  /* kurzes grünes Aufblitzen, dann schließt sich der Timer von selbst */
+  #resttimer.over{ background:color-mix(in srgb, var(--up) 14%, var(--bg)); }
+  #resttimer.over #restclock{ animation:flashGreen .45s ease-out 2; }
+  #resttimer.over .restbtns{ display:none; }
+  @keyframes flashGreen{
+    0%{ transform:scale(1); opacity:1; }
+    45%{ transform:scale(1.09); opacity:.65; }
+    100%{ transform:scale(1); opacity:1; }
+  }
+  @media (prefers-reduced-motion: reduce){ #resttimer.over #restclock{ animation:none; } }
   .restbtns{ display:flex; gap:12px; margin-top:14px; align-items:center; justify-content:center; }
   .restbtns:first-of-type{ margin-top:26px; }
   .restbtn{
@@ -835,7 +852,7 @@
     var left = (r.endsAt - Date.now()) / 1000;
     if (left <= 0){
       if (!r.rang){ r.rang = true; save(); beep(); }
-      if (left < -30){ stopRest(); return; }   // nach 30 s von selbst schließen
+      if (left < -1.8){ stopRest(); return; }   // kurz grün aufblitzen, dann zurück zum Workout
       el.classList.add('over');
       document.getElementById('restlabel').textContent = 'Pause vorbei' + (r.name ? ' · ' + r.name : '');
       document.getElementById('restclock').textContent = '0:00';
@@ -1063,25 +1080,52 @@
   }
 
   /* ----- Tracking ----- */
+  // Übungs-Eintrag fürs Tracking aus einer Plan-Übung bauen
+  function makeEntry(ex){
+    var last = lastSetsFor(ex.name);
+    var sets;
+    if (last){
+      sets = last.sets.map(function(s){ return { w:s.w, r:s.r }; });
+    } else {
+      sets = [];
+      for (var i=0;i<ex.sets;i++) sets.push({ w:null, r:ex.reps });
+    }
+    var mode = exMode(ex);
+    return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
+             bw: mode === 'bw', mode: mode, rest: exRest(ex), rests: (ex.rests ? ex.rests.slice() : null),
+             target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
+             last:last ? { sets:last.sets, date:last.date } : null };
+  }
+
+  // Laufendes Workout mit dem Plan abgleichen: gelöschte Übungen raus,
+  // neue rein, Reihenfolge wie im Plan. Bereits getrackte Übungen bleiben erhalten.
+  function syncDraftWithPlan(){
+    var d = db.draft;
+    if (!d) return;
+    var day = findDay(findPlan(d.planId), d.dayId);
+    if (!day) return;
+    var byId = {};
+    d.entries.forEach(function(e){ byId[e.exId] = e; });
+    var next = [];
+    day.exercises.forEach(function(ex){
+      next.push(byId[ex.id] || makeEntry(ex));
+      delete byId[ex.id];
+    });
+    Object.keys(byId).forEach(function(k){
+      var e = byId[k];
+      var used = e.touched || e.done || e.sets.some(function(s){ return s.done; });
+      if (used) next.push(e);   // schon getrackt → nicht wegwerfen
+    });
+    var changed = next.length !== d.entries.length ||
+                  next.some(function(e, i){ return e !== d.entries[i]; });
+    if (changed){ d.entries = next; save(); }
+  }
+
   function startDraft(dayId){
     var plan = activePlan();
     var day = findDay(plan, dayId);
     if (!day) return;
-    var entries = day.exercises.map(function(ex){
-      var last = lastSetsFor(ex.name);
-      var sets;
-      if (last){
-        sets = last.sets.map(function(s){ return { w:s.w, r:s.r }; });
-      } else {
-        sets = [];
-        for (var i=0;i<ex.sets;i++) sets.push({ w:null, r:ex.reps });
-      }
-      var mode = exMode(ex);
-      return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
-               bw: mode === 'bw', mode: mode, rest: exRest(ex), rests: (ex.rests ? ex.rests.slice() : null),
-               target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
-               last:last ? { sets:last.sets, date:last.date } : null };
-    });
+    var entries = day.exercises.map(makeEntry);
     db.draft = { date:todayISO(), planId:plan.id, dayId:day.id, dayName:day.name, entries:entries };
     save();
     view = { name:'track' };
@@ -1089,6 +1133,7 @@
   }
 
   function rTrack(){
+    syncDraftWithPlan();   // Plan-Änderungen (gelöschte/neue Übungen) übernehmen
     var d = db.draft;
     if (!d){ view = { name:'home' }; return rHome(); }
     var prog = draftProgress();
@@ -1097,9 +1142,18 @@
             '<div class="bigdate">' + esc(d.dayName) + '</div>' +
             (prog ? '<div class="sub" style="margin-top:4px">' + prog.done + ' von ' + prog.total + ' Übungen erledigt</div>' : '');
 
+    // erste noch offene Übung = die, die gerade dran ist
+    var currentIdx = -1;
+    for (var ci = 0; ci < d.entries.length; ci++){
+      if (!d.entries[ci].done){ currentIdx = ci; break; }
+    }
+
     d.entries.forEach(function(e, ei){
-      h += '<div class="card excard' + (e.done ? ' done' : '') + '">' +
-           '<div class="exname">' + esc(e.name) + '</div>' +
+      var isCurrent = ei === currentIdx;
+      h += '<div class="card excard' + (e.done ? ' done' : '') + (isCurrent ? ' current' : '') + '"' +
+           (isCurrent ? ' id="currentEx"' : '') + '>' +
+           '<div class="exname">' + esc(e.name) +
+             (isCurrent ? '<span class="nowtag">JETZT</span>' : '') + '</div>' +
            (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
            '<div class="lastline">' + esc(summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>';
       e.sets.forEach(function(s, si){
