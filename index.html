@@ -218,6 +218,16 @@
   .checkbtn:active{ background:var(--line); }
   .checkbtn.on{ background:var(--up); border-color:transparent; color:var(--up-ink); }
   .setrow.setdone .stepval{ opacity:.6; }
+  /* aktueller Satz: Nummer + Haken hervorgehoben */
+  .setrow.setcurrent .setnum{
+    color:var(--accent-ink); background:var(--accent); border-radius:50%;
+    width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+    margin-left:-1px;
+  }
+  .setrow.setcurrent .checkbtn{
+    border-color:var(--accent); color:var(--accent);
+    box-shadow:0 0 0 1.5px var(--accent);
+  }
   .stepgroup{
     display:flex; align-items:center; gap:0; flex:1 1 auto; min-width:120px; max-width:144px;
     background:var(--surface2); border-radius:12px; overflow:hidden;
@@ -419,6 +429,25 @@
   .restbtn.primary{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
   #resttimer.over .restbtn.primary{ background:var(--up); color:var(--up-ink); }
 
+  /* Kompakt-Modus: kleine Leiste unten, App bleibt bedienbar */
+  #resttimer.bar{
+    inset:auto 0 0 0; z-index:12;
+    flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-start;
+    gap:4px 10px; padding:10px 18px 12px;
+    background:color-mix(in srgb, var(--surface) 94%, transparent);
+    border-top:1px solid var(--line);
+    max-width:none; animation:barIn .2s ease-out;
+  }
+  @keyframes barIn{ from{ transform:translateY(20px); opacity:.4; } to{ transform:none; opacity:1; } }
+  @media (prefers-reduced-motion: reduce){ #resttimer.bar{ animation:none; } }
+  #resttimer.bar #restlabel{ order:1; width:100%; text-align:left; font-size:12px; }
+  #resttimer.bar #restclock{ order:2; font-size:30px; margin:0; margin-right:auto; }
+  #resttimer.bar .restbtns{ order:3; margin:0 !important; gap:8px; }
+  #resttimer.bar .restbtns:first-of-type{ margin:0 !important; }
+  #resttimer.bar .restbtn{ padding:9px 13px; font-size:13px; }
+  #resttimer.bar #restprog{ order:4; flex-basis:100%; width:auto; margin-top:2px; }
+  body.with-restbar #toast{ bottom:calc(200px + env(safe-area-inset-bottom)); }
+
   /* Toast */
   #toast{
     position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom));
@@ -527,6 +556,7 @@
   if (!db || !db.plans) db = seed();
   if (!db.settings) db.settings = { theme:'auto', brightness:100 };
   if (!db.settings.accent) db.settings.accent = 'blue';
+  if (!db.settings.timerMode) db.settings.timerMode = 'full';   // 'full' | 'bar'
   if (!db.breaks) db.breaks = [];
 
   function save(){
@@ -846,8 +876,27 @@
   function tickRest(){
     var el = document.getElementById('resttimer');
     var r = db.rest;
-    if (!r){ el.hidden = true; return; }
+    if (!r){
+      el.hidden = true;
+      document.body.classList.remove('with-restbar');
+      document.getElementById('app').style.paddingBottom = '';
+      return;
+    }
     el.hidden = false;
+
+    // Modus: Vollbild oder kleine Leiste unten (App bleibt bedienbar)
+    var barMode = (db.settings.timerMode === 'bar');
+    el.classList.toggle('bar', barMode);
+    document.body.classList.toggle('with-restbar', barMode);
+    if (barMode){
+      var tabH = document.getElementById('tabbar').offsetHeight;
+      el.style.bottom = tabH + 'px';
+      // App-Inhalt so weit hochschieben, dass nichts hinter der Leiste verschwindet
+      document.getElementById('app').style.paddingBottom = (tabH + el.offsetHeight + 24) + 'px';
+    } else {
+      el.style.bottom = '';
+      document.getElementById('app').style.paddingBottom = '';
+    }
 
     var left = (r.endsAt - Date.now()) / 1000;
     if (left <= 0){
@@ -1156,10 +1205,17 @@
              (isCurrent ? '<span class="nowtag">JETZT</span>' : '') + '</div>' +
            (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
            '<div class="lastline">' + esc(summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>';
+      // aktueller Satz = erster offener Satz der aktuellen Übung
+      var curSet = -1;
+      if (isCurrent){
+        for (var csi = 0; csi < e.sets.length; csi++){
+          if (!e.sets[csi].done){ curSet = csi; break; }
+        }
+      }
       e.sets.forEach(function(s, si){
         var wCls = e.bw ? '' : setDelta(e, si, 'w', s.w);
         var rCls = setDelta(e, si, 'r', s.r);
-        h += '<div class="setrow' + (s.done ? ' setdone' : '') + '">' +
+        h += '<div class="setrow' + (s.done ? ' setdone' : '') + (si === curSet ? ' setcurrent' : '') + '">' +
              '<span class="setnum num">' + (si+1) + '</span>' +
              (e.bw ? '' :
              '<div class="stepgroup">' +
@@ -1264,6 +1320,20 @@
          '</div>' +
          '<div class="tiny" style="margin-top:18px">Helligkeit</div>' +
          '<input type="range" min="55" max="100" step="5" value="' + db.settings.brightness + '" data-field="brightness" aria-label="Helligkeit">' +
+         '</div>';
+
+    h += '<div class="eyebrow" style="margin-top:32px">Pausen-Timer</div>' +
+         '<div class="card">' +
+         '<div class="tiny">Anzeige während der Pause</div><div class="chips">' +
+         [['full','Vollbild'],['bar','Leiste unten']].map(function(t){
+           return '<button class="chip' + (db.settings.timerMode === t[0] ? ' active' : '') + '" data-action="set-timermode" data-value="' + t[0] + '">' + t[1] + '</button>';
+         }).join('') +
+         '</div>' +
+         '<div class="tiny" style="margin-top:10px">' +
+         (db.settings.timerMode === 'bar'
+           ? 'Kleine Leiste unten – du kannst weiterscrollen und sehen, was als Nächstes kommt.'
+           : 'Großer Timer über den ganzen Bildschirm.') +
+         '</div>' +
          '</div>';
 
     h += '<div class="eyebrow" style="margin-top:32px">Daten</div>' +
@@ -1785,6 +1855,9 @@
       case 'set-accent':
         db.settings.accent = el.getAttribute('data-value');
         save(); applySettings(); view._keepScroll = true; render(); break;
+      case 'set-timermode':
+        db.settings.timerMode = el.getAttribute('data-value');
+        save(); if (db.rest) tickRest(); view._keepScroll = true; render(); break;
       case 'export': exportData(); break;
       case 'chart-tip':
         chartTip = (chartTip === +el.getAttribute('data-idx')) ? null : +el.getAttribute('data-idx');
