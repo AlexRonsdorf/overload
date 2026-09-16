@@ -412,6 +412,44 @@
     text-align:center; color:var(--ink2); font-size:15px; padding:28px 10px;
   }
 
+  /* Kalender: fixierte Leiste + gleich große Tageskästen */
+  .calbar{
+    position:sticky; top:env(safe-area-inset-top); z-index:5;
+    margin:0 -18px; padding:10px 18px 8px;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+    border-bottom:1px solid var(--line);
+  }
+  .calbar .row{ justify-content:space-between; }
+  .calcount{ font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
+  .calcount small{ font-size:14px; font-weight:600; color:var(--ink2); margin-left:6px; letter-spacing:0; }
+  .calyear{ display:flex; align-items:center; gap:4px; }
+  .calyear .iconbtn{ width:32px; height:32px; }
+  .calyear strong{ font-size:16px; min-width:52px; text-align:center; font-variant-numeric:tabular-nums; }
+  .calwd{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; margin-top:8px; }
+  .calwd span{ text-align:center; font-size:10px; font-weight:700; color:var(--ink3); letter-spacing:.04em; }
+  .calmonth{ margin-top:18px; }
+  .calmonth .eyebrow{ display:flex; justify-content:space-between; margin-bottom:6px; }
+  .calmonth .eyebrow b{ font-weight:600; color:var(--ink3); letter-spacing:0; text-transform:none; }
+  .calgrid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+  .calcell{
+    aspect-ratio:1; border-radius:7px; background:var(--surface2); border:none; padding:0;
+    font-family:ui-rounded, -apple-system, system-ui, sans-serif; font-size:11px; font-weight:600;
+    color:var(--ink3); font-variant-numeric:tabular-nums; cursor:default;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .calcell.blank{ background:transparent; }
+  .calcell.future{ opacity:.45; }
+  .calcell.brk{ background:color-mix(in srgb, var(--warn) 12%, var(--surface2)); color:color-mix(in srgb, var(--warn) 70%, var(--ink3)); }
+  .calcell.on{ background:var(--up); color:var(--up-ink); cursor:pointer; }
+  .calcell.on:active{ opacity:.8; }
+  .calcell.today{ box-shadow:inset 0 0 0 2px var(--accent); color:var(--accent); font-weight:800; }
+  .calcell.on.today{ box-shadow:inset 0 0 0 2px var(--accent-ink); color:var(--up-ink); }
+  .callegend{ display:flex; gap:14px; margin-top:6px; font-size:11px; color:var(--ink2); }
+  .callegend span::before{ content:""; display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; vertical-align:-1px; background:var(--surface2); }
+  .callegend .l-on::before{ background:var(--up); }
+  .callegend .l-brk::before{ background:color-mix(in srgb, var(--warn) 30%, var(--surface2)); }
+
   /* Tab bar */
   #tabbar{
     position:fixed; left:0; right:0; bottom:0; z-index:10;
@@ -540,6 +578,10 @@
     <button class="tab" data-action="nav" data-view="analytics" aria-label="Fortschritt">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19L10 12l4 4 6-8"/><circle cx="20" cy="8" r="1.6" fill="currentColor" stroke="none"/></svg>
       Fortschritt
+    </button>
+    <button class="tab" data-action="nav" data-view="calendar" aria-label="Kalender">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8 3v4M16 3v4"/><rect x="11" y="13" width="3" height="3" rx=".8" fill="currentColor" stroke="none"/></svg>
+      Kalender
     </button>
     <button class="tab" data-action="nav" data-view="settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.2" stroke-dasharray="3.1 2.6"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1144,16 +1186,27 @@
       case 'planEdit': html = rPlanEdit(); break;
       case 'dayEdit': html = rDayEdit(); break;
       case 'analytics': html = rAnalytics(); break;
+      case 'calendar': html = rCalendar(); break;
       case 'settings': html = rSettings(); break;
     }
     app.innerHTML = html;
     var tabs = document.querySelectorAll('.tab');
     var tabView = (view.name === 'home' || view.name === 'track' || view.name === 'session') ? 'home'
                 : (view.name === 'analytics') ? 'analytics'
+                : (view.name === 'calendar') ? 'calendar'
                 : (view.name === 'settings') ? 'settings' : 'plans';
     tabs.forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-view') === tabView); });
     updateProgressBar();
     window.scrollTo(0, view._keepScroll ? window.scrollY : 0);
+    // Kalender: beim Öffnen zum aktuellen Monat springen
+    if (view.name === 'calendar' && !view._keepScroll && view.calYear === new Date().getFullYear()){
+      var cm = document.getElementById('cal-m' + new Date().getMonth());
+      var cb = document.querySelector('.calbar');
+      if (cm && cm.offsetTop > 0){
+        var top = cm.offsetTop - (cb ? cb.offsetHeight : 0) - 8;
+        window.scrollTo(0, Math.max(0, top));
+      }
+    }
     view._keepScroll = false;
   }
 
@@ -1468,7 +1521,7 @@
     var s = null;
     for (var i=0;i<db.sessions.length;i++) if (db.sessions[i].id === view.id) s = db.sessions[i];
     if (!s){ view = { name:'home' }; return rHome(); }
-    var h = '<button class="backlink" data-action="nav" data-view="home">‹ Zurück</button>' +
+    var h = '<button class="backlink" data-action="back-session">‹ Zurück</button>' +
             '<div class="eyebrow">' + esc(fmtShort(s.date)) + '</div>' +
             '<div class="bigdate">' + esc(s.dayName) + '</div>';
     s.entries.forEach(function(e){
@@ -1830,6 +1883,77 @@
     return h;
   }
 
+  /* ----- Kalender ----- */
+  var MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  function rCalendar(){
+    var now = new Date();
+    var thisYear = now.getFullYear();
+    if (!view.calYear) view.calYear = thisYear;
+    var Y = view.calYear;
+    var iso = todayISO();
+
+    // Trainings je Tag (nur dieses Jahr)
+    var byDay = {}, count = 0, days = 0;
+    db.sessions.forEach(function(s){
+      if (s.date.slice(0, 4) !== String(Y)) return;
+      count++;
+      if (!byDay[s.date]){ byDay[s.date] = s.id; days++; }
+    });
+    // Pausentage
+    var brk = {};
+    db.breaks.forEach(function(b){
+      var d = parseISO(b.from), end = parseISO(b.to);
+      for (; d <= end; d.setDate(d.getDate() + 1)){
+        if (d.getFullYear() !== Y) continue;
+        var k = Y + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        brk[k] = b.kind || 'other';
+      }
+    });
+    var firstYear = thisYear;
+    db.sessions.forEach(function(s){ firstYear = Math.min(firstYear, +s.date.slice(0, 4)); });
+
+    var h = '<div class="calbar">' +
+            '<div class="row">' +
+              '<div class="calcount num">' + count + '<small>' + (count === 1 ? 'Training' : 'Trainings') + (days !== count ? ' · ' + days + ' Tage' : '') + '</small></div>' +
+              '<div class="calyear">' +
+                '<button class="iconbtn" data-action="cal-year" data-delta="-1"' + (Y <= firstYear ? ' disabled' : '') + ' aria-label="Vorheriges Jahr">‹</button>' +
+                '<strong class="num">' + Y + '</strong>' +
+                '<button class="iconbtn" data-action="cal-year" data-delta="1"' + (Y >= thisYear ? ' disabled' : '') + ' aria-label="Nächstes Jahr">›</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="calwd">' + WD_LABELS.map(function(l){ return '<span>' + l + '</span>'; }).join('') + '</div>' +
+            '</div>';
+
+    for (var m = 0; m < 12; m++){
+      var first = new Date(Y, m, 1);
+      var offset = (first.getDay() + 6) % 7;   // Montag = 0
+      var nDays = new Date(Y, m + 1, 0).getDate();
+      var mCount = 0;
+      for (var dd = 1; dd <= nDays; dd++){
+        var k0 = Y + '-' + String(m+1).padStart(2,'0') + '-' + String(dd).padStart(2,'0');
+        if (byDay[k0]) mCount++;
+      }
+      h += '<div class="calmonth" id="cal-m' + m + '"><div class="eyebrow"><span>' + MONTHS[m] + '</span><b class="num">' + (mCount ? mCount + '×' : '') + '</b></div><div class="calgrid">';
+      for (var b0 = 0; b0 < offset; b0++) h += '<span class="calcell blank"></span>';
+      for (var d0 = 1; d0 <= nDays; d0++){
+        var k = Y + '-' + String(m+1).padStart(2,'0') + '-' + String(d0).padStart(2,'0');
+        var cls = 'calcell';
+        if (byDay[k]) cls += ' on';
+        else if (brk[k]) cls += ' brk';
+        if (k === iso) cls += ' today';
+        else if (k > iso) cls += ' future';
+        if (byDay[k]){
+          h += '<button class="' + cls + '" data-action="open-session" data-id="' + byDay[k] + '" aria-label="Training am ' + esc(fmtShort(k)) + '">' + d0 + '</button>';
+        } else {
+          h += '<span class="' + cls + '">' + d0 + '</span>';
+        }
+      }
+      h += '</div></div>';
+    }
+    h += '<div class="callegend"><span class="l-on">Training</span><span class="l-brk">Pause / krank</span></div>';
+    return h;
+  }
+
   /* ---------- Export / Import ---------- */
   function exportData(){
     var blob = new Blob([JSON.stringify(db, null, 2)], { type:'application/json' });
@@ -1886,7 +2010,9 @@
       case 'resume':
         view = { name:'track' }; render(); break;
       case 'open-session':
-        view = { name:'session', id: el.getAttribute('data-id') }; render(); break;
+        view = { name:'session', id: el.getAttribute('data-id'), from: view.name === 'calendar' ? { name:'calendar', calYear:view.calYear } : null }; render(); break;
+      case 'back-session':
+        view = view.from || { name:'home' }; render(); break;
       case 'toggle-break-form':
         view.addBreak = !view.addBreak;
         view.breakKind = 'sick'; view.brFrom = view.brTo = view.brNote = null;
@@ -2114,6 +2240,9 @@
         db.settings.timerMode = el.getAttribute('data-value');
         save(); if (db.rest) tickRest(); view._keepScroll = true; render(); break;
       case 'export': exportData(); break;
+      case 'cal-year':
+        view.calYear = (view.calYear || new Date().getFullYear()) + (+el.getAttribute('data-delta'));
+        render(); break;
       case 'chart-tip':
         chartTip = (chartTip === +el.getAttribute('data-idx')) ? null : +el.getAttribute('data-idx');
         view._keepScroll = true; render(); break;
