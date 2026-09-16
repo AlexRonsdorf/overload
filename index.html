@@ -18,6 +18,7 @@
     --ink:#17181A; --ink2:#6E7176; --ink3:#A0A3A8;
     --line:#E4E4E1; --accent:#2E4FE0; --accent-ink:#FFFFFF; --accent-soft:rgba(46,79,224,.10);
     --danger:#C43D3D; --toast-accent:#9DB1FF; --up:#15803D; --up-ink:#FFFFFF;
+    --warn:#B45309; --pr:#0A7CFF; --pr-ink:#FFFFFF;
     --radius:16px;
   }
   @media (prefers-color-scheme: dark){
@@ -26,6 +27,7 @@
       --ink:#F3F3F1; --ink2:#A2A5AA; --ink3:#686B71;
       --line:#26282D; --accent:#5D7CFF; --accent-ink:#0B0C0E; --accent-soft:rgba(93,124,255,.14);
       --danger:#E06A6A; --toast-accent:#2E4FE0; --up:#4ADE80; --up-ink:#0B0C0E;
+      --warn:#FBBF24; --pr:#3DA5FF; --pr-ink:#0B0C0E;
     }
   }
   :root[data-theme="light"]{
@@ -33,12 +35,14 @@
     --ink:#17181A; --ink2:#6E7176; --ink3:#A0A3A8;
     --line:#E4E4E1; --accent:#2E4FE0; --accent-ink:#FFFFFF; --accent-soft:rgba(46,79,224,.10);
     --danger:#C43D3D; --toast-accent:#9DB1FF; --up:#15803D; --up-ink:#FFFFFF;
+    --warn:#B45309; --pr:#0A7CFF; --pr-ink:#FFFFFF;
   }
   :root[data-theme="dark"]{
     --bg:#0C0D0F; --surface:#151619; --surface2:#1E2024;
     --ink:#F3F3F1; --ink2:#A2A5AA; --ink3:#686B71;
     --line:#26282D; --accent:#5D7CFF; --accent-ink:#0B0C0E; --accent-soft:rgba(93,124,255,.14);
     --danger:#E06A6A; --toast-accent:#2E4FE0; --up:#4ADE80; --up-ink:#0B0C0E;
+      --warn:#FBBF24; --pr:#3DA5FF; --pr-ink:#0B0C0E;
   }
 
   /* Akzentfarben (jeweils helle + dunkle Variante); Blau ist der Standard oben */
@@ -232,7 +236,7 @@
     display:flex; align-items:center; gap:0; flex:1 1 auto; min-width:120px; max-width:144px;
     background:var(--surface2); border-radius:12px; overflow:hidden;
   }
-  .stepgroup.reps{ flex:0 0 78px; min-width:78px; max-width:78px; }
+  .stepgroup.reps{ flex:0 0 88px; min-width:88px; max-width:88px; }
   .stepbtn{
     width:30px; height:44px; flex:none; border:none; background:none;
     color:var(--ink2); font-size:20px; font-weight:600; cursor:pointer; font-family:inherit;
@@ -247,7 +251,55 @@
   }
   .stepval.up{ color:var(--up); }
   .stepval.down{ color:var(--danger); }
+  /* gelb: weniger als letztes Mal, aber schon früher geschafft (z. B. nach einer Pause) */
+  .stepval.back{ color:var(--warn); }
+  /* leuchtend blau: neuer persönlicher Rekord */
+  .stepval.pr{
+    color:var(--pr);
+    text-shadow:0 0 10px color-mix(in srgb, var(--pr) 55%, transparent);
+    animation:prPop .55s cubic-bezier(.2,.9,.3,1.4);
+  }
+  @keyframes prPop{
+    0%{ transform:scale(1); }
+    40%{ transform:scale(1.22); text-shadow:0 0 18px var(--pr); }
+    100%{ transform:scale(1); }
+  }
   .stepval .arr{ font-size:0.6em; font-weight:800; margin-left:1px; }
+  .stepval.pr .arr{ font-size:0.62em; margin-left:2px; }
+  /* Haken bei Rekord-Satz leuchtet */
+  .checkbtn.on.pr{
+    background:var(--pr); color:var(--pr-ink);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--pr) 28%, transparent), 0 0 18px color-mix(in srgb, var(--pr) 70%, transparent);
+    animation:prGlow 1.4s ease-in-out 3;
+  }
+  @keyframes prGlow{
+    0%,100%{ box-shadow:0 0 0 3px color-mix(in srgb, var(--pr) 28%, transparent), 0 0 12px color-mix(in srgb, var(--pr) 55%, transparent); }
+    50%{ box-shadow:0 0 0 5px color-mix(in srgb, var(--pr) 40%, transparent), 0 0 28px var(--pr); }
+  }
+  .excard.prcard{ border-color:var(--pr); box-shadow:0 0 0 1.5px var(--pr), 0 0 24px color-mix(in srgb, var(--pr) 30%, transparent); }
+  @media (prefers-reduced-motion: reduce){ .stepval.pr, .checkbtn.on.pr{ animation:none; } }
+  .prtag{
+    display:inline-block; margin-left:8px; vertical-align:2px;
+    background:var(--pr); color:var(--pr-ink); border-radius:999px;
+    font-size:10px; font-weight:800; letter-spacing:.06em; padding:3px 8px;
+  }
+  .badge{
+    display:inline-block; border-radius:999px; font-size:11px; font-weight:700;
+    padding:2px 8px; margin-left:6px; vertical-align:1px;
+  }
+  .badge.pr{ background:var(--pr); color:var(--pr-ink); }
+  .badge.break{ background:var(--surface2); color:var(--ink2); }
+  .badge.warn{ background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn); }
+  .legend{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:14px; font-size:12px; color:var(--ink2); }
+  .legend span::before{
+    content:""; display:inline-block; width:9px; height:9px; border-radius:50%;
+    margin-right:5px; vertical-align:0; background:var(--ink3);
+  }
+  .legend .l-up::before{ background:var(--up); }
+  .legend .l-pr::before{ background:var(--pr); box-shadow:0 0 6px var(--pr); }
+  .legend .l-back::before{ background:var(--warn); }
+  .recordrow{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+  .recordrow:first-of-type{ border-top:none; padding-top:0; }
   /* Picker: eigenes iOS-Style-Rad im Bottom-Sheet */
   #picker{ position:fixed; inset:0; z-index:30; }
   #picker[hidden]{ display:none; }
@@ -651,10 +703,59 @@
     if (!last) return 'Erstes Mal — noch keine Daten';
     return 'Letztes Mal (' + fmtDM(last.date) + '): ' + fmtSets(last.sets, mode);
   }
-  // compares a set's value with last time. field 'w' = weight, 'r' = reps.
-  // weight falls back to last workout's top set; reps compare same set number.
+  /* ---- Gesamt-Analyse: alle bisherigen Trainings einer Übung ---- */
+  var histCache = {};
+  // Bestwerte über ALLE gespeicherten Workouts (nicht nur das letzte)
+  function exStats(name){
+    var key = name.trim().toLowerCase();
+    if (histCache[key]) return histCache[key];
+    var st = { n:0, maxW:0, maxWReps:0, maxWDate:null, maxR:0, maxRW:0, maxRDate:null, sets:[] };
+    db.sessions.forEach(function(s){
+      s.entries.forEach(function(e){
+        if (e.name.trim().toLowerCase() !== key) return;
+        st.n++;
+        e.sets.forEach(function(x){
+          var w = x.w || 0, r = x.r || 0;
+          st.sets.push({ w:w, r:r, date:s.date });
+          if (w > st.maxW){ st.maxW = w; st.maxWReps = r; st.maxWDate = s.date; }
+          else if (w === st.maxW && r > st.maxWReps){ st.maxWReps = r; st.maxWDate = s.date; }
+          if (r > st.maxR || (r === st.maxR && w > st.maxRW)){ st.maxR = r; st.maxRW = w; st.maxRDate = s.date; }
+        });
+      });
+    });
+    // meiste Wiederholungen, die je mit mindestens diesem Gewicht geschafft wurden
+    st.bestRepsAt = function(w){
+      var best = 0;
+      for (var i = 0; i < st.sets.length; i++){
+        if (st.sets[i].w >= w - 1e-9) best = Math.max(best, st.sets[i].r);
+      }
+      return best;
+    };
+    histCache[key] = st;
+    return st;
+  }
+  function clearStats(){ histCache = {}; }
+
+  // Bewertet einen Satz-Wert gegen die gesamte Historie. field 'w' = Gewicht, 'r' = Wdh.
+  //  'pr'   = neuer persönlicher Rekord (leuchtend blau)
+  //  'up'   = mehr als letztes Mal, aber kein Rekord (grün)
+  //  'back' = weniger als letztes Mal, aber früher schon geschafft (gelb)
+  //  'down' = weniger als je zuvor (rot)
+  //  ''     = gleich wie letztes Mal / keine Daten
   function setDelta(e, si, field, val){
-    if (!e.last || val === null || val === undefined) return '';
+    if (val === null || val === undefined) return '';
+    var st = exStats(e.name);
+    var bw = e.mode === 'bw' || (e.bw && e.mode !== 'bwplus');
+    var set = e.sets[si] || {};
+    if (st.n && val > 0){
+      if (field === 'w'){
+        if (val > st.maxW) return 'pr';
+      } else {
+        var wNow = bw ? 0 : (set.w || 0);
+        if (val > st.bestRepsAt(wNow)) return 'pr';
+      }
+    }
+    if (!e.last) return '';
     var ref = e.last.sets[si] ? e.last.sets[si][field] : null;
     if (field === 'w' && (ref === null || ref === undefined)){
       ref = 0;
@@ -662,33 +763,89 @@
     }
     if (ref === null || ref === undefined) return '';
     if (val > ref) return 'up';
-    if (val < ref) return 'down';
+    if (val < ref){
+      var achieved = field === 'w' ? (st.maxW >= val) : (st.bestRepsAt(bw ? 0 : (set.w || 0)) >= val);
+      return achieved ? 'back' : 'down';
+    }
     return '';
   }
+  // Ist dieser Satz (Gewicht oder Wdh.) ein neuer Rekord?
+  function setIsPR(e, si){
+    var s = e.sets[si];
+    if (!s) return false;
+    var bw = e.mode === 'bw' || (e.bw && e.mode !== 'bwplus');
+    return (!bw && setDelta(e, si, 'w', s.w) === 'pr') || setDelta(e, si, 'r', s.r) === 'pr';
+  }
+  var RATE_CLASSES = ['up','down','back','pr'];
   function weightDeltaClass(e, si, w){ return setDelta(e, si, 'w', w); }
   // updates a value button's number, colour and arrow in place
   // value + kleiner Pfeil (▲/▼) als HTML
   function valHTML(field, val, cls){
     var t = (val === null || val === undefined) ? '–' : (field === 'w' ? fmtW(val) : val);
-    return t + (cls ? ' <span class="arr">' + (cls === 'up' ? '▲' : '▼') + '</span>' : '');
+    var arr = cls === 'pr' ? '★' : (cls === 'up' ? '▲' : '▼');
+    return t + (cls ? ' <span class="arr">' + arr + '</span>' : '');
   }
   function updateValBtn(btn, e, si, field, val){
     var group = btn.closest('.stepgroup');
     var pb = group ? group.querySelector('[data-action="pick"][data-field="' + field + '"]') : btn;
     if (!pb) return;
     var cls = setDelta(e, si, field, val);
-    pb.classList.remove('up','down');
+    RATE_CLASSES.forEach(function(c){ pb.classList.remove(c); });
     if (cls) pb.classList.add(cls);
     pb.innerHTML = valHTML(field, val, cls);
+    var row = group ? group.closest('.setrow') : null;
+    if (!row) return;
+    // Gewicht geändert → Wdh.-Bewertung hängt davon ab, also mit aktualisieren
+    if (field === 'w'){
+      var rb = row.querySelector('[data-action="pick"][data-field="r"]');
+      if (rb){
+        var rcls = setDelta(e, si, 'r', e.sets[si].r);
+        RATE_CLASSES.forEach(function(c){ rb.classList.remove(c); });
+        if (rcls) rb.classList.add(rcls);
+        rb.innerHTML = valHTML('r', e.sets[si].r, rcls);
+      }
+    }
+    var cb = row.querySelector('.checkbtn');
+    if (cb) cb.classList.toggle('pr', !!(e.sets[si].done && setIsPR(e, si)));
+    var card = row.closest('.excard');
+    if (card) card.classList.toggle('prcard', e.sets.some(function(x, i){ return x.done && setIsPR(e, i); }));
   }
   function updateWBtn(btn, e, si, w){ updateValBtn(btn, e, si, 'w', w); }
+  // Art der Pause: krank / Urlaub / Verletzung / sonstiges
+  var BREAK_KINDS = [['sick','Krank'],['vacation','Urlaub'],['injury','Verletzung'],['other','Sonstiges']];
+  function breakKindLabel(b){
+    if (b.kind === 'sick') return 'Krank';
+    if (b.kind === 'vacation') return 'Urlaub';
+    if (b.kind === 'injury') return 'Verletzung';
+    return 'Pause';
+  }
+  function breakTitle(b){
+    return breakKindLabel(b) + (b.note ? ' · ' + b.note : '');
+  }
+  function breakDays(b){
+    return Math.round((parseISO(b.to) - parseISO(b.from)) / 86400000) + 1;
+  }
+  function breakDur(b){
+    var days = breakDays(b);
+    return days === 1 ? '1 Tag'
+         : (days % 7 === 0 ? (days / 7) + (days === 7 ? ' Woche' : ' Wochen') : days + ' Tage');
+  }
+  // Pausen, die zwischen zwei Daten liegen (Datum A ausgeschlossen, Datum B eingeschlossen)
+  function breaksBetween(aISO, bISO){
+    return db.breaks.filter(function(b){ return b.to > aISO && b.from <= bISO; })
+      .sort(function(x, y){ return x.from < y.from ? -1 : 1; });
+  }
+  function breakToday(){
+    var t = todayISO();
+    for (var i = 0; i < db.breaks.length; i++){
+      if (db.breaks[i].from <= t && db.breaks[i].to >= t) return db.breaks[i];
+    }
+    return null;
+  }
   // "01.08. – 21.08.2026 · 3 Wochen" for a break entry
   function breakLabel(b){
-    var days = Math.round((parseISO(b.to) - parseISO(b.from)) / 86400000) + 1;
-    var dur = days === 1 ? '1 Tag'
-            : (days % 7 === 0 ? (days / 7) + (days === 7 ? ' Woche' : ' Wochen') : days + ' Tage');
     var range = b.from === b.to ? fmtShort(b.from) : fmtDM(b.from) + ' – ' + fmtShort(b.to);
-    return range + ' · ' + dur;
+    return range + ' · ' + breakDur(b);
   }
   // Pausenzeit einer Übung (Standard 90 s, 0 = aus) und Anzeige als "1:30"
   function exRest(x){
@@ -977,6 +1134,7 @@
   var app = document.getElementById('app');
 
   function render(){
+    clearStats();
     var html = '';
     switch(view.name){
       case 'home': html = rHome(); break;
@@ -1027,6 +1185,16 @@
         if (plan.days[i].weekdays.indexOf(wd) !== -1){ today = plan.days[i]; break; }
       }
       var doneToday = db.sessions.filter(function(s){ return s.date === iso; });
+      var bt = breakToday();
+      if (bt && !db.draft){
+        h += '<div class="card" style="border-style:dashed">' +
+             '<div class="eyebrow">' + esc(breakKindLabel(bt)) + '</div>' +
+             '<div style="font-weight:700">' + (bt.kind === 'sick' ? 'Gute Besserung' : bt.kind === 'injury' ? 'Erhol dich gut' : bt.kind === 'vacation' ? 'Schönen Urlaub' : 'Pause läuft') +
+             ' – eingetragen bis ' + esc(fmtDM(bt.to)) + '</div>' +
+             (bt.note ? '<div class="sub" style="margin-top:2px">' + esc(bt.note) + '</div>' : '') +
+             '<div class="tiny" style="margin-top:8px">Wenn du danach tiefer einsteigst, zeigt die App das gelb an – kein Rückschritt, du warst schon mal dort.</div>' +
+             '</div>';
+      }
 
       if (db.draft){
         var isOld = db.draft.date !== iso;
@@ -1088,15 +1256,20 @@
     // Archive (Workouts + Pausen chronologisch gemischt)
     var sessions = sortedSessions();
     h += '<div class="eyebrowrow"><span class="eyebrow">Archiv</span>' +
-         '<button class="minibtn" data-action="toggle-break-form">＋ Pause</button></div>';
+         '<button class="minibtn" data-action="toggle-break-form">＋ Pause / krank</button></div>';
 
     if (view.addBreak){
       var iso2 = todayISO();
+      var kindSel = view.breakKind || 'sick';
       h += '<div class="card">' +
-           '<div class="tiny">Von</div><input type="date" id="brFrom" value="' + iso2 + '">' +
-           '<div class="tiny" style="margin-top:10px">Bis</div><input type="date" id="brTo" value="' + iso2 + '">' +
-           '<div class="tiny" style="margin-top:10px">Grund (optional)</div>' +
-           '<input type="text" id="brNote" placeholder="z. B. Urlaub, krank">' +
+           '<div class="tiny">Art der Pause</div><div class="chips">' +
+           BREAK_KINDS.map(function(k){
+             return '<button class="chip' + (kindSel === k[0] ? ' active' : '') + '" data-action="break-kind" data-value="' + k[0] + '">' + k[1] + '</button>';
+           }).join('') + '</div>' +
+           '<div class="tiny" style="margin-top:12px">Von</div><input type="date" id="brFrom" value="' + (view.brFrom || iso2) + '">' +
+           '<div class="tiny" style="margin-top:10px">Bis</div><input type="date" id="brTo" value="' + (view.brTo || iso2) + '">' +
+           '<div class="tiny" style="margin-top:10px">Notiz (optional)</div>' +
+           '<input type="text" id="brNote" value="' + esc(view.brNote || '') + '" placeholder="z. B. Erkältung, Rücken">' +
            '<button class="btn" data-action="save-break">Pause speichern</button>' +
            '<button class="btn ghost" data-action="toggle-break-form">Abbrechen</button>' +
            '</div>';
@@ -1119,7 +1292,7 @@
         } else {
           var b = it.b;
           h += '<div class="listitem breakitem">' +
-               '<span><strong>Pause' + (b.note ? ' · ' + esc(b.note) : '') + '</strong><br><span class="sub">' + esc(breakLabel(b)) + '</span></span>' +
+               '<span><strong>' + esc(breakTitle(b)) + '</strong><br><span class="sub">' + esc(breakLabel(b)) + '</span></span>' +
                '<button class="iconbtn" data-action="del-break" data-id="' + b.id + '" aria-label="Pause löschen">✕</button>' +
                '</div>';
         }
@@ -1199,12 +1372,27 @@
 
     d.entries.forEach(function(e, ei){
       var isCurrent = ei === currentIdx;
-      h += '<div class="card excard' + (e.done ? ' done' : '') + (isCurrent ? ' current' : '') + '"' +
+      var hasPR = e.sets.some(function(x, i){ return x.done && setIsPR(e, i); });
+      var st = exStats(e.name);
+      var isBW = e.mode === 'bw' || (e.bw && e.mode !== 'bwplus');
+      var recLine = '';
+      if (st.n){
+        recLine = isBW
+          ? 'Rekord: ' + st.maxR + ' Wdh. (' + fmtDM(st.maxRDate) + ')'
+          : 'Rekord: ' + (e.mode === 'bwplus' ? '+' : '') + fmtW(st.maxW) + ' kg × ' + st.maxWReps + ' (' + fmtDM(st.maxWDate) + ')';
+        if (!isBW && st.maxR > st.maxWReps) recLine += ' · meiste Wdh.: ' + st.maxR + ' × ' + fmtW(st.maxRW) + ' kg';
+      }
+      var sinceBreaks = e.last ? breaksBetween(e.last.date, d.date) : [];
+      h += '<div class="card excard' + (e.done ? ' done' : '') + (isCurrent ? ' current' : '') + (hasPR ? ' prcard' : '') + '"' +
            (isCurrent ? ' id="currentEx"' : '') + '>' +
            '<div class="exname">' + esc(e.name) +
-             (isCurrent ? '<span class="nowtag">JETZT</span>' : '') + '</div>' +
+             (isCurrent ? '<span class="nowtag">JETZT</span>' : '') +
+             (hasPR ? '<span class="prtag">REKORD</span>' : '') + '</div>' +
            (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
-           '<div class="lastline">' + esc(summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>';
+           '<div class="lastline">' + esc(summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>' +
+           (recLine ? '<div class="lastline">' + esc(recLine) + '</div>' : '') +
+           (sinceBreaks.length ? '<div class="lastline" style="color:var(--warn)">Seitdem: ' +
+             esc(sinceBreaks.map(function(b){ return breakKindLabel(b) + ' · ' + breakDur(b); }).join(', ')) + '</div>' : '');
       // aktueller Satz = erster offener Satz der aktuellen Übung
       var curSet = -1;
       if (isCurrent){
@@ -1232,7 +1420,7 @@
                '<span class="unit">WDH</span>' +
                (e.bw ? '<button class="stepbtn" data-action="r-inc" data-ex="' + ei + '" data-set="' + si + '" aria-label="Wiederholungen plus">+</button>' : '') +
              '</div>' +
-             '<button class="checkbtn' + (s.done ? ' on' : '') + '" data-action="set-check" data-ex="' + ei + '" data-set="' + si + '" aria-label="Satz ' + (si+1) + ' abhaken">✓</button>' +
+             '<button class="checkbtn' + (s.done ? ' on' : '') + (s.done && setIsPR(e, si) ? ' pr' : '') + '" data-action="set-check" data-ex="' + ei + '" data-set="' + si + '" aria-label="Satz ' + (si+1) + ' abhaken">✓</button>' +
              '</div>';
       });
       h += '<div class="setactions">' +
@@ -1244,6 +1432,11 @@
            '</div>';
     });
 
+    h += '<div class="legend">' +
+         '<span class="l-up">mehr als letztes Mal</span>' +
+         '<span class="l-pr">neuer Rekord</span>' +
+         '<span class="l-back">weniger, aber schon mal geschafft</span>' +
+         '</div>';
     h += '<button class="btn" data-action="finish">Workout abschließen</button>' +
          '<button class="btn danger-ghost" data-action="discard" data-confirm="discard">' +
          (confirmArm === 'discard' ? 'Wirklich verwerfen?' : 'Workout verwerfen') + '</button>';
@@ -1475,6 +1668,13 @@
         p.top = m;
       });
     }
+    // Rekord-Punkte (erstmals höher als alles davor) + Pausen vor diesem Workout
+    var runMax = -1;
+    pts.forEach(function(p, i){
+      p.pr = i > 0 && p.top > runMax;
+      runMax = Math.max(runMax, p.top);
+      p.breaks = i > 0 ? breaksBetween(pts[i-1].date, p.date) : [];
+    });
     return { pts: pts, repsMode: repsMode };
   }
 
@@ -1512,22 +1712,34 @@
     if (pts.length > 1){
       s += '<text x="'+(W-padR)+'" y="'+(H-8)+'" text-anchor="end" font-size="10" fill="var(--ink3)">'+fmtDM(pts[pts.length-1].date)+'</text>';
     }
+    // Pausen zwischen zwei Workouts: gestrichelte Linie + Art der Pause
+    pts.forEach(function(p,i){
+      if (!i || !p.breaks || !p.breaks.length) return;
+      var gx = (x(i-1) + x(i)) / 2;
+      s += '<line x1="'+gx.toFixed(1)+'" y1="'+padT+'" x2="'+gx.toFixed(1)+'" y2="'+(H-padB)+'" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="3 3"/>' +
+           '<text x="'+gx.toFixed(1)+'" y="'+(padT-6)+'" text-anchor="middle" font-size="9" font-weight="700" fill="var(--warn)">'+esc(breakKindLabel(p.breaks[0]))+'</text>';
+    });
     // line
     if (pts.length > 1){
       var dPath = pts.map(function(p,i){ return (i?'L':'M') + x(i).toFixed(1) + ' ' + y(p.top).toFixed(1); }).join(' ');
       s += '<path d="'+dPath+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
     }
-    // points (+ big invisible hit targets)
+    // points (+ big invisible hit targets); Rekorde leuchtend blau
     pts.forEach(function(p,i){
       var last = i === pts.length-1;
       var sel = chartTip === i;
-      s += '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.top).toFixed(1)+'" r="'+(last||sel?5:3.5)+'" fill="'+(last||sel?'var(--accent)':'var(--surface)')+'" stroke="var(--accent)" stroke-width="2"/>';
+      if (p.pr){
+        s += '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.top).toFixed(1)+'" r="9" fill="var(--pr)" opacity=".18"/>' +
+             '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.top).toFixed(1)+'" r="'+(last||sel?5.5:4.5)+'" fill="var(--pr)" stroke="var(--surface)" stroke-width="1.5"/>';
+      } else {
+        s += '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.top).toFixed(1)+'" r="'+(last||sel?5:3.5)+'" fill="'+(last||sel?'var(--accent)':'var(--surface)')+'" stroke="var(--accent)" stroke-width="2"/>';
+      }
       s += '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.top).toFixed(1)+'" r="14" fill="transparent" style="cursor:pointer" data-action="chart-tip" data-idx="'+i+'"/>';
     });
     // last value label
     var lp = pts[pts.length-1];
     var lx = x(pts.length-1), ly = y(lp.top);
-    s += '<text x="'+Math.min(lx, W-padR-6).toFixed(1)+'" y="'+(ly-10).toFixed(1)+'" text-anchor="'+(lx > W-70 ? 'end' : 'middle')+'" font-size="12" font-weight="700" fill="var(--accent)">'+fmtW(lp.top)+'</text>';
+    s += '<text x="'+Math.min(lx, W-padR-6).toFixed(1)+'" y="'+(ly-10).toFixed(1)+'" text-anchor="'+(lx > W-70 ? 'end' : 'middle')+'" font-size="12" font-weight="700" fill="'+(lp.pr ? 'var(--pr)' : 'var(--accent)')+'">'+fmtW(lp.top)+(lp.pr ? ' ★' : '')+'</text>';
     s += '</svg>';
     return s;
   }
@@ -1560,10 +1772,30 @@
     }
 
     var first = pts[0].top, last = pts[pts.length-1].top, diff = Math.round((last-first)*100)/100;
-    h += '<div class="stattiles">' +
-         '<div class="tile"><div class="tiny">Start</div><div class="v num">' + fmtW(first) + '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span></div></div>' +
-         '<div class="tile"><div class="tiny">Aktuell</div><div class="v num">' + fmtW(last) + '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span></div></div>' +
-         '<div class="tile"><div class="tiny">Entwicklung</div><div class="v num' + (diff>0?' up':'') + '">' + (diff>0?'+':'') + fmtW(diff) + '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span></div></div>' +
+    var st = exStats(analyticsEx);
+    var best = hist.repsMode ? st.maxR : st.maxW;
+    var lastIsPR = last >= best && pts[pts.length-1].pr;
+    var toBest = Math.round((best - last) * 100) / 100;
+    var u = '<span style="font-size:13px;color:var(--ink2)">' + unit + '</span>';
+    h += '<div class="stattiles" style="grid-template-columns:1fr 1fr">' +
+         '<div class="tile" style="border-color:var(--pr)"><div class="tiny">Rekord</div><div class="v num" style="color:var(--pr)">' + fmtW(best) + u + '</div>' +
+           '<div class="tiny">' + (hist.repsMode ? esc(fmtDM(st.maxRDate)) : '× ' + st.maxWReps + ' · ' + esc(fmtDM(st.maxWDate))) + '</div></div>' +
+         '<div class="tile"><div class="tiny">Aktuell</div><div class="v num' + (lastIsPR ? '" style="color:var(--pr)' : '') + '">' + fmtW(last) + u + '</div>' +
+           '<div class="tiny">' + (lastIsPR ? 'neuer Rekord ★' : (toBest > 0 ? fmtW(toBest) + unit + ' bis zum Rekord' : 'auf Rekord-Niveau')) + '</div></div>' +
+         '<div class="tile"><div class="tiny">Start</div><div class="v num">' + fmtW(first) + u + '</div><div class="tiny">' + esc(fmtDM(pts[0].date)) + '</div></div>' +
+         '<div class="tile"><div class="tiny">Entwicklung</div><div class="v num' + (diff>0?' up':'') + '">' + (diff>0?'+':'') + fmtW(diff) + u + '</div><div class="tiny">' + pts.length + ' Workouts</div></div>' +
+         '</div>';
+
+    // Bestleistungen im Detail
+    var nPR = pts.filter(function(p){ return p.pr; }).length;
+    var allBreaks = pts.length > 1 ? breaksBetween(pts[0].date, todayISO()) : [];
+    h += '<div class="eyebrow" style="margin-top:24px">Bestleistungen</div><div class="card">';
+    if (!hist.repsMode){
+      h += '<div class="recordrow"><span class="sub">Schwerstes Gewicht</span><span class="num" style="font-weight:700">' + fmtW(st.maxW) + ' kg × ' + st.maxWReps + ' <span class="tiny">' + esc(fmtDM(st.maxWDate)) + '</span></span></div>';
+    }
+    h += '<div class="recordrow"><span class="sub">Meiste Wiederholungen</span><span class="num" style="font-weight:700">' + st.maxR + (hist.repsMode ? ' Wdh.' : ' × ' + fmtW(st.maxRW) + ' kg') + ' <span class="tiny">' + esc(fmtDM(st.maxRDate)) + '</span></span></div>' +
+         '<div class="recordrow"><span class="sub">Rekorde gebrochen</span><span class="num" style="font-weight:700">' + nPR + '×</span></div>' +
+         '<div class="recordrow"><span class="sub">Pausen seit Start</span><span class="num" style="font-weight:700">' + allBreaks.length + (allBreaks.length ? ' <span class="tiny">' + esc(allBreaks.map(function(b){ return breakKindLabel(b) + ' ' + breakDur(b); }).join(', ')) + '</span>' : '') + '</span></div>' +
          '</div>';
 
     if (pts.length === 1){
@@ -1578,13 +1810,22 @@
            '<div class="tipbox">' + esc(tip || 'Tippe einen Punkt für Details') + '</div></div>';
     }
 
-    // history list (doubles as table view)
+    // history list (doubles as table view); Pausen chronologisch dazwischen
     h += '<div class="eyebrow" style="margin-top:24px">Alle Einträge</div>';
-    pts.slice().reverse().forEach(function(p){
-      h += '<div class="card" style="padding:12px 14px;margin-top:8px"><div class="row between">' +
-           '<span class="sub">' + esc(fmtShort(p.date)) + '</span>' +
-           '<span class="num" style="font-weight:700">' + fmtW(p.top) + unit + '</span></div>' +
+    pts.slice().reverse().forEach(function(p, ri){
+      var prev = pts[pts.length - 2 - ri];
+      var dropped = prev && p.top < prev.top;
+      h += '<div class="card" style="padding:12px 14px;margin-top:8px' + (p.pr ? ';border-color:var(--pr)' : '') + '"><div class="row between">' +
+           '<span class="sub">' + esc(fmtShort(p.date)) +
+             (p.pr ? '<span class="badge pr">Rekord</span>' : '') +
+             (dropped && p.breaks.length ? '<span class="badge warn">Wiedereinstieg</span>' : '') + '</span>' +
+           '<span class="num" style="font-weight:700' + (p.pr ? ';color:var(--pr)' : '') + '">' + fmtW(p.top) + unit + '</span></div>' +
            '<div class="tiny num" style="margin-top:2px">' + esc(fmtSets(p.sets)) + '</div></div>';
+      if (p.breaks && p.breaks.length){
+        p.breaks.slice().reverse().forEach(function(b){
+          h += '<div class="listitem breakitem" style="margin-top:8px;padding:9px 14px"><span><strong style="font-size:14px">' + esc(breakTitle(b)) + '</strong><br><span class="tiny">' + esc(breakLabel(b)) + '</span></span></div>';
+        });
+      }
     });
     return h;
   }
@@ -1648,6 +1889,13 @@
         view = { name:'session', id: el.getAttribute('data-id') }; render(); break;
       case 'toggle-break-form':
         view.addBreak = !view.addBreak;
+        view.breakKind = 'sick'; view.brFrom = view.brTo = view.brNote = null;
+        view._keepScroll = true; render(); break;
+      case 'break-kind':
+        view.breakKind = el.getAttribute('data-value');
+        view.brFrom = document.getElementById('brFrom').value;
+        view.brTo = document.getElementById('brTo').value;
+        view.brNote = document.getElementById('brNote').value;
         view._keepScroll = true; render(); break;
       case 'save-break': {
         var bFrom = document.getElementById('brFrom').value;
@@ -1655,10 +1903,11 @@
         var bNote = (document.getElementById('brNote').value || '').trim();
         if (!bFrom || !bTo){ toast('Bitte beide Daten wählen'); break; }
         if (bTo < bFrom){ var tmpB = bFrom; bFrom = bTo; bTo = tmpB; }
-        db.breaks.push({ id:uid(), from:bFrom, to:bTo, note:bNote });
+        var bKind = view.breakKind || 'sick';
+        db.breaks.push({ id:uid(), from:bFrom, to:bTo, note:bNote, kind:bKind });
         save();
         view.addBreak = false;
-        render(); toast('Pause eingetragen ✓'); break;
+        render(); toast(breakKindLabel({ kind:bKind }) + ' eingetragen ✓'); break;
       }
       case 'del-break':
         rememberForUndo();
@@ -1712,8 +1961,14 @@
         // Übung gilt als erledigt, sobald alle Sätze abgehakt sind
         e6.done = e6.sets.every(function(st){ return st.done; });
         save();
+        var isPR = s6.done && setIsPR(e6, rsi);
         if (s6.done) startRest(entryRestForSet(e6, rsi), e6.name + ' · Satz ' + (rsi + 1));  // großer Timer
-        view._keepScroll = true; render(); break;
+        view._keepScroll = true; render();
+        if (isPR){
+          var bwPR = e6.mode === 'bw' || (e6.bw && e6.mode !== 'bwplus');
+          toast('Neuer Rekord ★ ' + e6.name + ' · ' + (bwPR ? (s6.r || 0) + ' Wdh.' : fmtW(s6.w || 0) + ' kg × ' + (s6.r || 0)));
+        }
+        break;
       }
       case 'pick': {
         var field = el.getAttribute('data-field');
