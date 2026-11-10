@@ -100,6 +100,7 @@
   }
   #statusbar-shim{
     position:fixed; top:0; left:0; right:0; z-index:11;
+    transform:translateZ(0);
     height:env(safe-area-inset-top);
     background:color-mix(in srgb, var(--bg) 82%, transparent);
     -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
@@ -361,11 +362,34 @@
     background:var(--accent); color:var(--accent-ink); border-radius:999px;
     font-size:10px; font-weight:800; letter-spacing:.06em; padding:3px 8px;
   }
-  .setactions{ display:flex; gap:8px; margin-top:10px; }
+  .setactions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
   .setactions button{
-    flex:1; border:none; border-radius:10px; background:none; border:1px dashed var(--line);
+    flex:1 1 calc(50% - 4px); border:none; border-radius:10px; background:none; border:1px dashed var(--line);
     color:var(--ink2); font-family:inherit; font-size:13px; font-weight:600; padding:8px; cursor:pointer;
+    white-space:nowrap;
   }
+  /* Notiz zur Übung */
+  .notebox{
+    width:100%; margin-top:10px; background:var(--surface2); color:var(--ink);
+    border:1px solid transparent; border-radius:12px; font-family:inherit; font-size:15px;
+    padding:10px 12px; resize:none; line-height:1.4; min-height:44px;
+    -webkit-appearance:none; appearance:none;
+  }
+  .notebox:focus{ border-color:var(--accent); outline:none; }
+  .noteline{
+    margin-top:8px; padding:8px 12px; border-left:3px solid var(--accent); border-radius:0 10px 10px 0;
+    background:var(--accent-soft); font-size:14px; color:var(--ink); line-height:1.4; white-space:pre-wrap;
+  }
+  .noteline .tiny{ display:block; margin-bottom:1px; }
+  /* übersprungene Übung: eingeklappt */
+  .excard.skipped{ opacity:.72; border-style:dashed; padding-bottom:14px; }
+  .excard.skipped .exname{ color:var(--ink2); }
+  .skiptag{
+    display:inline-block; margin-left:8px; vertical-align:2px;
+    background:var(--surface2); color:var(--ink2); border-radius:999px;
+    font-size:10px; font-weight:800; letter-spacing:.06em; padding:3px 8px;
+  }
+  .lastline.warnline{ color:var(--warn); }
 
   /* Chips (weekdays) */
   .chips{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
@@ -453,6 +477,7 @@
   /* Tab bar */
   #tabbar{
     position:fixed; left:0; right:0; bottom:0; z-index:10;
+    transform:translateZ(0); will-change:transform;
     background:color-mix(in srgb, var(--bg) 82%, transparent);
     -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
     border-top:1px solid var(--line);
@@ -724,6 +749,32 @@
     }
     return null;
   }
+  // letzter Eintrag einer Übung, egal ob gemacht oder übersprungen
+  function lastEntryFor(name){
+    var key = name.trim().toLowerCase();
+    var list = sortedSessions();
+    for (var i=0;i<list.length;i++){
+      var s = list[i];
+      for (var j=0;j<s.entries.length;j++){
+        var e = s.entries[j];
+        if (e.name.trim().toLowerCase() === key) return { entry:e, date:s.date };
+      }
+    }
+    return null;
+  }
+  // jüngste Notiz zu einer Übung
+  function lastNoteFor(name){
+    var key = name.trim().toLowerCase();
+    var list = sortedSessions();
+    for (var i=0;i<list.length;i++){
+      var s = list[i];
+      for (var j=0;j<s.entries.length;j++){
+        var e = s.entries[j];
+        if (e.name.trim().toLowerCase() === key && e.note && e.note.trim()) return { note:e.note.trim(), date:s.date };
+      }
+    }
+    return null;
+  }
   function isBWSets(sets){
     for (var i=0;i<sets.length;i++){ if ((sets[i].w||0) > 0) return false; }
     return sets.length > 0;
@@ -974,6 +1025,7 @@
     }
     var done = pickerCtx.onDone;
     pickerCtx = null;
+    if (document.activeElement === inp) inp.blur();
     document.getElementById('picker').hidden = true;
     done(value);
   }
@@ -1014,7 +1066,7 @@
     var d = db.draft;
     if (!d || !d.entries.length) return null;
     var done = 0;
-    d.entries.forEach(function(e){ if (e.done) done++; });
+    d.entries.forEach(function(e){ if (e.done || e.skipped) done++; });
     return { done: done, total: d.entries.length };
   }
   // dünne Leiste auf der Tab-Leiste; nur während des Trackings sichtbar
@@ -1337,10 +1389,10 @@
     } else {
       items.forEach(function(it){
         if (it.type === 's'){
-          var s = it.s, nSets = 0;
-          s.entries.forEach(function(e){ nSets += e.sets.length; });
+          var s = it.s, nSets = 0, nEx = 0, nSkip = 0;
+          s.entries.forEach(function(e){ nSets += e.sets.length; if (e.sets.length) nEx++; if (e.skipped) nSkip++; });
           h += '<button class="listitem" data-action="open-session" data-id="' + s.id + '">' +
-               '<span><strong>' + esc(s.dayName) + '</strong><br><span class="sub">' + esc(fmtShort(s.date)) + ' · ' + s.entries.length + ' Übungen · ' + nSets + ' Sätze</span></span>' +
+               '<span><strong>' + esc(s.dayName) + '</strong><br><span class="sub">' + esc(fmtShort(s.date)) + ' · ' + nEx + ' Übungen · ' + nSets + ' Sätze' + (nSkip ? ' · ' + nSkip + ' übersprungen' : '') + '</span></span>' +
                '<span class="chev">›</span></button>';
         } else {
           var b = it.b;
@@ -1366,10 +1418,14 @@
       for (var i=0;i<ex.sets;i++) sets.push({ w:null, r:ex.reps });
     }
     var mode = exMode(ex);
-    return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false,
+    var le = lastEntryFor(ex.name);
+    var ln = lastNoteFor(ex.name);
+    return { exId:ex.id, name:ex.name, sets:sets, done:false, touched:false, skipped:false, note:null,
              bw: mode === 'bw', mode: mode, rest: exRest(ex), rests: (ex.rests ? ex.rests.slice() : null),
              target: ex.sets + ' Sätze × ' + fmtRepsRange(ex) + ' Wdh.',
-             last:last ? { sets:last.sets, date:last.date } : null };
+             last:last ? { sets:last.sets, date:last.date } : null,
+             lastSkipped: (le && le.entry.skipped) ? le.date : null,
+             lastNote: ln };
   }
 
   // Laufendes Workout mit dem Plan abgleichen: gelöschte Übungen raus,
@@ -1420,7 +1476,7 @@
     // erste noch offene Übung = die, die gerade dran ist
     var currentIdx = -1;
     for (var ci = 0; ci < d.entries.length; ci++){
-      if (!d.entries[ci].done){ currentIdx = ci; break; }
+      if (!d.entries[ci].done && !d.entries[ci].skipped){ currentIdx = ci; break; }
     }
 
     d.entries.forEach(function(e, ei){
@@ -1436,16 +1492,30 @@
         if (!isBW && st.maxR > st.maxWReps) recLine += ' · meiste Wdh.: ' + st.maxR + ' × ' + fmtW(st.maxRW) + ' kg';
       }
       var sinceBreaks = e.last ? breaksBetween(e.last.date, d.date) : [];
+      // übersprungen: eingeklappte Karte
+      if (e.skipped){
+        h += '<div class="card excard skipped">' +
+             '<div class="row between">' +
+               '<div><div class="exname">' + esc(e.name) + '<span class="skiptag">ÜBERSPRUNGEN</span></div>' +
+               (e.note ? '<div class="lastline">Notiz: ' + esc(e.note) + '</div>' : '') + '</div>' +
+               '<button class="minibtn" data-action="unskip" data-ex="' + ei + '">Doch machen</button>' +
+             '</div></div>';
+        return;
+      }
+      var noteOpen = e.note !== null && e.note !== undefined;
       h += '<div class="card excard' + (e.done ? ' done' : '') + (isCurrent ? ' current' : '') + (hasPR ? ' prcard' : '') + '"' +
            (isCurrent ? ' id="currentEx"' : '') + '>' +
            '<div class="exname">' + esc(e.name) +
              (isCurrent ? '<span class="nowtag">JETZT</span>' : '') +
              (hasPR ? '<span class="prtag">REKORD</span>' : '') + '</div>' +
            (e.target ? '<div class="lastline">Ziel: ' + esc(e.target) + '</div>' : '') +
-           '<div class="lastline">' + esc(summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>' +
+           (e.lastSkipped ? '<div class="lastline warnline">Letztes Mal (' + esc(fmtDM(e.lastSkipped)) + ') übersprungen</div>' : '') +
+           '<div class="lastline">' + esc(e.lastSkipped && e.last ? 'Zuletzt gemacht (' + fmtDM(e.last.date) + '): ' + fmtSets(e.last.sets, e.mode || (e.bw ? 'bw' : undefined)) : summarizeLast(e.last, e.mode || (e.bw ? 'bw' : undefined))) + '</div>' +
            (recLine ? '<div class="lastline">' + esc(recLine) + '</div>' : '') +
-           (sinceBreaks.length ? '<div class="lastline" style="color:var(--warn)">Seitdem: ' +
-             esc(sinceBreaks.map(function(b){ return breakKindLabel(b) + ' · ' + breakDur(b); }).join(', ')) + '</div>' : '');
+           (sinceBreaks.length ? '<div class="lastline warnline">Seitdem: ' +
+             esc(sinceBreaks.map(function(b){ return breakKindLabel(b) + ' · ' + breakDur(b); }).join(', ')) + '</div>' : '') +
+           (e.lastNote ? '<div class="noteline"><span class="tiny">Notiz vom ' + esc(fmtDM(e.lastNote.date)) + '</span>' + esc(e.lastNote.note) + '</div>' : '') +
+           (noteOpen ? '<textarea class="notebox" rows="2" data-field="ex-note" data-ex="' + ei + '" placeholder="Notiz fürs nächste Mal, z. B. Griff enger, Bank auf Stufe 3">' + esc(e.note || '') + '</textarea>' : '');
       // aktueller Satz = erster offener Satz der aktuellen Übung
       var curSet = -1;
       if (isCurrent){
@@ -1479,6 +1549,8 @@
       h += '<div class="setactions">' +
            '<button data-action="add-set" data-ex="' + ei + '">＋ Satz</button>' +
            (e.sets.length > 1 ? '<button data-action="rem-set" data-ex="' + ei + '">− Satz</button>' : '') +
+           (noteOpen ? '' : '<button data-action="add-note" data-ex="' + ei + '">✎ Notiz</button>') +
+           (e.done ? '' : '<button data-action="skip" data-ex="' + ei + '">Überspringen</button>') +
            '</div>' +
            '<button class="donebtn" data-action="toggle-done" data-ex="' + ei + '">' +
            (e.done ? '✓ Erledigt' : 'Übung abhaken') + '</button>' +
@@ -1501,12 +1573,21 @@
     if (!d) return;
     var entries = [];
     d.entries.forEach(function(e){
-      if (!e.done && !e.touched) return; // untouched exercises are not saved
+      var note = (e.note || '').trim();
+      var base = { exId:e.exId, name:e.name, bw:!!e.bw, mode: e.mode || (e.bw ? 'bw' : 'weight') };
+      if (e.skipped){
+        base.sets = []; base.skipped = true; if (note) base.note = note;
+        entries.push(base); return;
+      }
+      if (!e.done && !e.touched && !note) return; // untouched exercises are not saved
       var sets = e.sets.filter(function(s){ return (s.r||0) > 0 || (s.w||0) > 0; })
                        .map(function(s){ return { w:(s.w===null?0:s.w), r:(s.r===null?0:s.r) }; });
-      if (sets.length) entries.push({ exId:e.exId, name:e.name, bw:!!e.bw, mode: e.mode || (e.bw ? 'bw' : 'weight'), sets:sets });
+      if (!sets.length && !note) return;
+      base.sets = sets; if (note) base.note = note;
+      entries.push(base);
     });
-    if (!entries.length){ toast('Nichts eingetragen — hake mindestens eine Übung ab'); return; }
+    var anyDone = entries.some(function(e){ return e.sets.length; });
+    if (!anyDone){ toast('Nichts eingetragen — hake mindestens eine Übung ab'); return; }
     db.sessions.push({ id:uid(), ts:Date.now(), date:d.date, planName:(findPlan(d.planId)||{}).name || '', dayName:d.dayName, entries:entries });
     db.draft = null;
     stopRest();
@@ -1525,8 +1606,10 @@
             '<div class="eyebrow">' + esc(fmtShort(s.date)) + '</div>' +
             '<div class="bigdate">' + esc(s.dayName) + '</div>';
     s.entries.forEach(function(e){
-      h += '<div class="card"><div class="exname">' + esc(e.name) + '</div>' +
-           '<div class="sub num" style="margin-top:4px">' + esc(fmtSets(e.sets, e.mode || (e.bw === undefined ? undefined : !!e.bw))) + '</div></div>';
+      h += '<div class="card' + (e.skipped ? ' excard skipped' : '') + '"><div class="exname">' + esc(e.name) + (e.skipped ? '<span class="skiptag">ÜBERSPRUNGEN</span>' : '') + '</div>' +
+           (e.sets.length ? '<div class="sub num" style="margin-top:4px">' + esc(fmtSets(e.sets, e.mode || (e.bw === undefined ? undefined : !!e.bw))) + '</div>' : '') +
+           (e.note ? '<div class="noteline"><span class="tiny">Notiz</span>' + esc(e.note) + '</div>' : '') +
+           '</div>';
     });
     h += '<button class="btn danger-ghost" data-action="del-session" data-id="' + s.id + '" data-confirm="delsess">' +
          (confirmArm === 'delsess' ? 'Wirklich löschen?' : 'Eintrag löschen') + '</button>';
@@ -1706,7 +1789,7 @@
     var pts = [];
     sortedSessions().reverse().forEach(function(s){
       s.entries.forEach(function(e){
-        if (e.name.trim().toLowerCase() !== key) return;
+        if (e.name.trim().toLowerCase() !== key || !e.sets.length) return;
         var top = 0, vol = 0;
         e.sets.forEach(function(st){ top = Math.max(top, st.w||0); vol += (st.w||0)*(st.r||0); });
         pts.push({ date:s.date, top:top, vol:vol, sets:e.sets, bw: !!e.bw || e.mode === 'bw' });
@@ -2072,6 +2155,24 @@
         e4.touched = true;
         save(); view._keepScroll = true; render(); break;
       }
+      case 'skip': {
+        var eS = d.entries[+el.getAttribute('data-ex')];
+        eS.skipped = true; eS.done = false;
+        save(); view._keepScroll = true; render(); toast(eS.name + ' übersprungen'); break;
+      }
+      case 'unskip': {
+        var eU = d.entries[+el.getAttribute('data-ex')];
+        eU.skipped = false;
+        save(); view._keepScroll = true; render(); break;
+      }
+      case 'add-note': {
+        var eN = d.entries[+el.getAttribute('data-ex')];
+        if (eN.note === null || eN.note === undefined) eN.note = '';
+        save(); view._keepScroll = true; render();
+        var ta = document.querySelector('textarea[data-ex="' + el.getAttribute('data-ex') + '"]');
+        if (ta) ta.focus();
+        break;
+      }
       case 'toggle-done': {
         var e5 = d.entries[+el.getAttribute('data-ex')];
         e5.done = !e5.done;
@@ -2286,6 +2387,13 @@
       e.touched = true;
       save(); return;
     }
+    if (field === 'ex-note'){
+      var eNote = db.draft && db.draft.entries[+el.getAttribute('data-ex')];
+      if (!eNote) return;
+      eNote.note = el.value;
+      el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px';   // mitwachsen
+      save(); return;
+    }
     if (field === 'brightness'){
       db.settings.brightness = +el.value;
       save(); applySettings();
@@ -2332,6 +2440,30 @@
   document.addEventListener('visibilitychange', function(){
     if (!document.hidden && db.rest) tickRest();
   });
+
+  // iOS lässt fixierte Leisten nach der Bildschirmtastatur manchmal mitten auf der Seite "kleben":
+  // nach jedem Verlassen eines Eingabefelds (und wenn die Tastatur zugeht) die Ansicht neu verankern.
+  function reanchorBars(){
+    window.scrollTo(window.scrollX, window.scrollY);
+    var tb = document.getElementById('tabbar');
+    tb.style.transform = 'translateZ(0) translateY(0.01px)';
+    requestAnimationFrame(function(){ tb.style.transform = ''; });
+  }
+  document.addEventListener('focusout', function(ev){
+    var t = ev.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')){
+      setTimeout(reanchorBars, 60);
+      setTimeout(reanchorBars, 350);
+    }
+  });
+  if (window.visualViewport){
+    var vvH = window.visualViewport.height;
+    window.visualViewport.addEventListener('resize', function(){
+      var h = window.visualViewport.height;
+      if (h > vvH + 40) setTimeout(reanchorBars, 50);   // Tastatur zugegangen
+      vvH = h;
+    });
+  }
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(function(){ /* offline support unavailable */ });
